@@ -6,7 +6,7 @@ import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
 
 import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
-import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData } from "@/app/types";
+import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 
 interface ChatInterfaceProps {
@@ -23,6 +23,18 @@ function isAIMessageChunk(chunk: unknown): boolean {
     "id" in chunk &&
     Array.isArray(chunk.id) &&
     chunk.id[2] === "AIMessageChunk"
+  )
+}
+
+function isToolMessage(chunk: unknown): boolean {
+  return Boolean(
+    chunk &&
+    typeof chunk === "object" &&
+    "lc" in chunk &&
+    "kwargs" in chunk &&
+    "id" in chunk &&
+    Array.isArray(chunk.id) &&
+    chunk.id[2] === "ToolMessage"
   )
 }
 
@@ -129,13 +141,55 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         return [];
       };
 
-      // Helper function to process update events (streaming AIMessageChunk data)
-      const processUpdate = (data: UpdateData) => {
-        // Check if this is a chunk update (array of [AIMessageChunk, LangGraphMetadata])
-        const hasAIMessageChunk = Array.isArray(data) && data.length === 2 && isAIMessageChunk(data[0])
-        if (!hasAIMessageChunk) {
+      // Helper function to update tool call state with tool message result
+      const updateToolCallWithMessage = (toolMsg: ToolMessageData) => {
+        const toolCallId = toolMsg.kwargs?.tool_call_id as string | undefined;
+        if (!toolCallId) {
           return;
         }
+
+        setToolCalls((prev) => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(toolCallId);
+          if (existing) {
+            newMap.set(toolCallId, { ...existing, toolMessage: toolMsg });
+          } else {
+            // If we haven't seen the tool call yet, create a placeholder
+            newMap.set(toolCallId, {
+              toolCall: {
+                id: toolCallId,
+                name: toolMsg.kwargs?.name as string || "unknown",
+                args: {},
+                type: "tool_call"
+              },
+              toolMessage: toolMsg,
+              aiMessageId: currentAssistantId,
+              timestamp: Date.now()
+            });
+          }
+          return newMap;
+        });
+      };
+
+      // Helper function to process update events (streaming AIMessageChunk data or ToolMessage data)
+      const processUpdate = (data: UpdateData) => {
+        // Check if this is an array update (either [AIMessageChunk, LangGraphMetadata] or [ToolMessage, LangGraphMetadata])
+        if (!Array.isArray(data) || data.length !== 2) {
+          return;
+        }
+
+        // Handle ToolMessage updates
+        if (isToolMessage(data[0])) {
+          const toolMsg = data[0] as unknown as ToolMessageData;
+          updateToolCallWithMessage(toolMsg);
+          return;
+        }
+
+        // Handle AIMessageChunk updates
+        if (!isAIMessageChunk(data[0])) {
+          return;
+        }
+
         const msg = data[0] as AIMessageChunk;
         const msgId = msg.kwargs?.id as string | undefined;
         const messageId = msgId || currentAssistantId;
@@ -221,30 +275,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       const processTools = (data: ToolsEventData) => {
         const toolMessages = data.tools?.messages || [];
         for (const toolMsg of toolMessages) {
-          const toolCallId = toolMsg.kwargs?.tool_call_id as string;
-          if (toolCallId) {
-            setToolCalls((prev) => {
-              const newMap = new Map(prev);
-              const existing = newMap.get(toolCallId);
-              if (existing) {
-                newMap.set(toolCallId, { ...existing, toolMessage: toolMsg });
-              } else {
-                // If we haven't seen the tool call yet, create a placeholder
-                newMap.set(toolCallId, {
-                  toolCall: {
-                    id: toolCallId,
-                    name: toolMsg.kwargs?.name as string || "unknown",
-                    args: {},
-                    type: "tool_call"
-                  },
-                  toolMessage: toolMsg,
-                  aiMessageId: currentAssistantId,
-                  timestamp: Date.now()
-                });
-              }
-              return newMap;
-            });
-          }
+          updateToolCallWithMessage(toolMsg);
         }
       };
 
