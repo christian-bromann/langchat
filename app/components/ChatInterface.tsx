@@ -3,20 +3,29 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
+import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
+
+import { EVENT_TYPES } from "@/app/constants";
+import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ChunkUpdateData } from "@/app/types";
 
 interface ChatInterfaceProps {
   selectedScenario: string | null;
   apiKey: string;
 }
 
+function isAIMessageOrAIMessageChunk(msg: unknown): boolean {
+  const m = msg as { id?: string[]; lc?: number; [key: string]: unknown };
+  return !!(
+    m.lc === 1 &&
+    m.id &&
+    m.id[0] === "langchain_core" &&
+    m.id[1] === "messages" &&
+    (m.id[2] === "AIMessageChunk" || m.id[2] === "AIMessage")
+  );
+}
+
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<BaseMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,22 +56,12 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     if (!apiKey.trim()) {
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "⚠️ Please enter your Anthropic API key in the sidebar to use this app.",
-          timestamp: new Date(),
-        },
+        new AIMessage("⚠️ Please enter your Anthropic API key in the sidebar to use this app."),
       ]);
       return;
     }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: inputValue,
-      timestamp: new Date(),
-    };
+    const userMessage = new HumanMessage(inputValue);
 
     setMessages((prev) => [...prev, userMessage]);
     const messageToSend = inputValue;
@@ -71,13 +70,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
     // Create assistant message placeholder
     const assistantId = (Date.now() + 1).toString();
-    const assistantMessage: Message = {
+    setMessages((prev) => [...prev, new AIMessage({
       id: assistantId,
-      role: "assistant",
       content: "",
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, assistantMessage]);
+    })]);
 
     try {
       // Determine API endpoint - use basic for now
@@ -97,172 +93,93 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         throw new Error(`HTTP error! status: ${response.status}: ${errorText}`);
       }
 
-      // Handle SSE stream
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error("No response body");
-      }
-
-      let buffer = "";
       let hasReceivedData = false;
 
       // Reset refs for this stream
       accumulatedContentRef.current = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
+      // Helper function to process update data
+      const processUpdateData = (data: UpdateData) => {
+        // Extract messages from the update data
+        const messagesToProcess = extractMessagesFromUpdateData(data);
 
-        hasReceivedData = true;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        if (messagesToProcess.length > 0) {
+          // Check if this is a final summary message (contains full accumulated content)
+          const firstMsg = messagesToProcess[0];
+          const content = extractContentFromMessage(firstMsg);
 
-        let currentEventType = "update";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            currentEventType = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            const dataStr = line.slice(6);
-            try {
-              const data = JSON.parse(dataStr);
+          // Skip if this content matches or starts with what we've already accumulated
+          // This indicates it's a final summary, not an incremental chunk
+          if (content && accumulatedContentRef.current.length > 0) {
+            const accumulated = accumulatedContentRef.current;
+            if (
+              content === accumulated ||
+              (content.length >= accumulated.length && content.startsWith(accumulated))
+            ) {
+              return;
+            }
+          }
 
-              if (currentEventType === "error") {
-                const errorMessage = data.error || "Unknown error occurred";
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantId
-                      ? { ...msg, content: `Error: ${errorMessage}` }
-                      : msg
-                  )
-                );
-                break;
-              }
+          // Process each AI message chunk
+          for (const msg of messagesToProcess) {
+            const newContent = extractContentFromMessage(msg);
 
-              // Handle different event formats
-              // Format 1: data: [{...}] - array of messages (incremental chunks)
-              // Format 2: data: {"messages": [...]} - object with messages array (final summary)
-              let messagesToProcess: unknown[] = [];
-
-              if (Array.isArray(data)) {
-                // Direct array format - these are incremental chunks
-                messagesToProcess = data;
-              } else if (data.messages && Array.isArray(data.messages)) {
-                // Object format with messages array
-                // Skip if this is the final summary message (has full content)
-                // Only process if it's incremental chunks
-                const firstMsg = data.messages[0];
-                if (firstMsg && firstMsg.kwargs && firstMsg.kwargs.content) {
-                  const content = firstMsg.kwargs.content;
-                  // If content is very long (likely final summary), skip it
-                  // We've already processed incremental chunks
-                  if (typeof content === "string" && content.length > 100) {
-                    continue;
-                  }
-                }
-                messagesToProcess = data.messages;
-              }
-
-              // Filter out user messages and only process AI messages
-              const aiMessages = messagesToProcess.filter((msg: unknown) => {
-                const m = msg as { id?: string[]; lc?: number; [key: string]: unknown };
-                return (
-                  m.lc === 1 &&
-                  m.id &&
-                  m.id[0] === "langchain_core" &&
-                  m.id[1] === "messages" &&
-                  (m.id[2] === "AIMessageChunk" || m.id[2] === "AIMessage")
-                );
-              });
-
-
-              if (aiMessages.length > 0) {
-                // Process each AI message chunk
-                for (const msg of aiMessages) {
-                  // Extract content from the message
-                  let newContent = "";
-
-                  if ((msg as { content?: unknown }).content !== undefined) {
-                    const msgContent = (msg as { content: unknown }).content;
-                    if (typeof msgContent === "string") {
-                      newContent = msgContent;
-                    } else if (Array.isArray(msgContent)) {
-                      newContent = msgContent
-                        .map((item: unknown) => {
-                          if (typeof item === "string") return item;
-                          if (item && typeof item === "object") {
-                            if ("text" in item && typeof (item as { text: unknown }).text === "string") {
-                              return String((item as { text: string }).text);
-                            }
-                            if ("content" in item) {
-                              return String((item as { content: unknown }).content);
-                            }
-                          }
-                          return "";
-                        })
-                        .join("");
-                    }
-                  } else if ((msg as { kwargs?: { content?: unknown } }).kwargs?.content) {
-                    const kwargsContent = (msg as { kwargs: { content: unknown } }).kwargs.content;
-                    if (typeof kwargsContent === "string") {
-                      newContent = kwargsContent;
-                    } else if (Array.isArray(kwargsContent)) {
-                      newContent = kwargsContent
-                        .map((item: unknown) => {
-                          if (typeof item === "string") return item;
-                          if (item && typeof item === "object" && "text" in item) {
-                            return String((item as { text: string }).text);
-                          }
-                          return "";
-                        })
-                        .join("");
-                    }
-                  }
-
-                  // Process incremental content chunks
-                  // Each chunk contains only the new content, not accumulated content
-                  if (newContent !== undefined && newContent !== null && newContent.length > 0) {
-                    // Append the incremental chunk to accumulated content
-                    accumulatedContentRef.current += newContent;
-                    // Immediately update UI with the accumulated content (real-time streaming)
-                    setMessages((prev) =>
-                      prev.map((msg) =>
-                        msg.id === assistantId
-                          ? { ...msg, content: accumulatedContentRef.current }
-                          : msg
-                      )
-                    );
-                  }
-                }
-              }
-
-              if (currentEventType === "end") {
-                // Ensure all content is displayed when stream ends
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantId
-                      ? { ...msg, content: accumulatedContentRef.current }
-                      : msg
-                  )
-                );
-                break;
-              }
-            } catch {
-              // Silently ignore JSON parse errors for incomplete data
+            // Process incremental content chunks
+            // Each chunk contains only the new content, not accumulated content
+            if (newContent !== undefined && newContent !== null && newContent.length > 0) {
+              // Append the incremental chunk to accumulated content
+              accumulatedContentRef.current += newContent;
+              // Immediately update UI with the accumulated content (real-time streaming)
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantId
+                    ? new AIMessage({ ...msg, content: accumulatedContentRef.current })
+                    : msg
+                )
+              );
             }
           }
         }
-      }
+      };
+
+      readStream(response, {
+        update: (data: UpdateData) => {
+          hasReceivedData = true;
+          processUpdateData(data);
+        },
+        interrupt: () => {
+          // Handle interrupt events if needed
+        },
+        agent: () => {
+          // Handle agent events if needed
+        },
+        end: () => {
+          // Ensure all content is displayed when stream ends
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? new AIMessage({ ...msg, content: accumulatedContentRef.current })
+                : msg
+            )
+          );
+        },
+        error: (error: Error) => {
+          const errorMessage = error.message || "Unknown error occurred";
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? new AIMessage({ ...msg, content: `Error: ${errorMessage}` })
+                : msg
+            )
+          );
+        },
+      });
 
       // Ensure all content is displayed when stream ends
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
-            ? { ...msg, content: accumulatedContentRef.current }
+            ? new AIMessage({ ...msg, content: accumulatedContentRef.current })
             : msg
         )
       );
@@ -271,7 +188,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantId
-              ? { ...msg, content: "No response received from the agent." }
+              ? new AIMessage({ ...msg, content: "No response received from the agent." })
               : msg
           )
         );
@@ -281,10 +198,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
-            ? {
+            ? new AIMessage({
                 ...msg,
                 content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
-              }
+              })
             : msg
         )
       );
@@ -326,21 +243,21 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.map((message) => (
               <div
-                key={message.id}
+                key={message.id || Date.now()}
                 className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
+                  HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
                 }`}
               >
                 <div
                   className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                    message.role === "user"
+                    HumanMessage.isInstance(message)
                       ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
                       : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   }`}
                 >
                   <p className="whitespace-pre-wrap">
-                    {message.content}
-                    {message.role === "assistant" && isLoading && message.content === "" && (
+                    {message.content as string}
+                    {AIMessage.isInstance(message) && isLoading && message.content === "" && (
                       <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
                     )}
                   </p>
@@ -389,3 +306,141 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   );
 }
 
+interface StreamEventCallbacks {
+  update: (data: UpdateData) => void;
+  interrupt: (data: InterruptEventData) => void;
+  agent: (data: AgentEventData) => void;
+  end: () => void;
+  error: (error: Error) => void;
+}
+
+/**
+ * Reads a stream from the API and calls the callback function for each event.
+ * @param response - The response from the API
+ * @param callback - The callback function to handle the event
+ * @returns void
+ * @throws Error if the response body is not found or the event type is unknown
+ * @throws Error if the event type is unknown
+ * @throws Error if the data is not valid JSON
+ */
+async function readStream (response: Response, callbacks: StreamEventCallbacks) {
+  // Handle SSE stream
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  if (!reader) {
+    throw new Error("No response body");
+  }
+
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    let currentEventType: EventType = "update";
+    for (const line of lines) {
+      if (!line) {
+        continue;
+      }
+
+      if (line.startsWith("event: ")) {
+        currentEventType = line.slice(7).trim() as EventType;
+
+        if (!EVENT_TYPES.includes(currentEventType)) {
+          throw new Error(`Unknown event type: ${currentEventType}`);
+        }
+        continue
+      }
+
+      if (line.startsWith("data: ")) {
+        const dataStr = line.slice(6);
+        try {
+          const data = JSON.parse(dataStr);
+
+          // Handle different event types with appropriate callbacks
+          if (currentEventType === "end") {
+            callbacks.end();
+          } else if (currentEventType === "error") {
+            // Convert error data to Error object
+            const errorMessage = typeof data === "string" ? data : data?.error || "Unknown error occurred";
+            callbacks.error(new Error(errorMessage));
+          } else {
+            if (!(currentEventType in callbacks)) {
+              throw new Error(`Unknown event type: ${currentEventType}`);
+            }
+
+            // For update, interrupt, and agent events, pass the data
+            callbacks[currentEventType](data);
+          }
+        } catch (error) {
+          console.error("Error parsing stream data:", error);
+          // If parsing fails, treat it as an error event
+          callbacks.error(error instanceof Error ? error : new Error("Failed to parse stream data"));
+        }
+
+        continue;
+      }
+
+      console.error("Unknown line in stream:", line);
+    }
+  }
+}
+
+// Helper function to extract messages from different update data formats
+const extractMessagesFromUpdateData = (data: UpdateData): AIMessageChunk[] => {
+  // Check if it's a ChunkUpdateData (array format)
+  if (Array.isArray(data)) {
+    // ChunkUpdateData is [AIMessageChunk, LangGraphMetadata]
+    const chunkData = data as ChunkUpdateData;
+    return [chunkData[0]];
+  }
+
+  // Check if it's MessagesUpdateData
+  if ("messages" in data && Array.isArray(data.messages)) {
+    return data.messages.filter(isAIMessageOrAIMessageChunk) as AIMessageChunk[];
+  }
+
+  // Check if it's ModelRequestUpdateData
+  if ("model_request" in data && data.model_request?.messages) {
+    return data.model_request.messages;
+  }
+
+  // Check if it's FullUpdateData
+  if ("messages" in data && "_privateState" in data && Array.isArray(data.messages)) {
+    return data.messages.filter(isAIMessageOrAIMessageChunk) as AIMessageChunk[];
+  }
+
+  return [];
+};
+
+// Helper function to extract content from AIMessageChunk
+const extractContentFromMessage = (msg: AIMessageChunk): string => {
+  let content = "";
+
+  // Try to get content from kwargs.content first
+  if (msg.kwargs?.content !== undefined) {
+    const kwargsContent = msg.kwargs.content;
+    if (typeof kwargsContent === "string") {
+      content = kwargsContent;
+    } else if (Array.isArray(kwargsContent)) {
+      content = (kwargsContent as unknown[])
+        .map((item: unknown) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object" && "text" in item) {
+            return String((item as { text: string }).text);
+          }
+          return "";
+        })
+        .join("");
+    }
+  }
+
+  return content;
+};

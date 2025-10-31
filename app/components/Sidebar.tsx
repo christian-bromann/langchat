@@ -10,7 +10,7 @@ interface AgentScenario {
 
 const scenarios: AgentScenario[] = [
   { id: "simple-agent", name: "Simple Agent" },
-  // { id: "human-in-the-loop", name: "Human In the Loop" },
+  { id: "human-in-the-loop", name: "Human In the Loop" },
   // { id: "summarization", name: "Summarization" },
   // { id: "model-call-limits", name: "Model Call Limits" },
 ];
