@@ -171,9 +171,23 @@ export interface EndEventData {
   [key: string]: unknown;
 }
 
+// Action request in interrupt event
+export interface ActionRequest {
+  name: string;
+  args: Record<string, unknown>;
+  description: string;
+}
+
+// Review config in interrupt event
+export interface ReviewConfig {
+  actionName: string;
+  allowedDecisions: ("approve" | "edit" | "reject")[];
+}
+
 // Interrupt event data structure
 export interface InterruptEventData {
-  [key: string]: unknown;
+  action_requests: ActionRequest[];
+  review_configs: ReviewConfig[];
 }
 
 // Agent event data structure

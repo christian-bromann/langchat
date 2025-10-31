@@ -8,6 +8,7 @@ import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
 import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
+import { InterruptBubble } from "./InterruptBubble";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
@@ -43,6 +44,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [toolCalls, setToolCalls] = useState<Map<string, ToolCallState>>(new Map());
+  const [interruptData, setInterruptData] = useState<InterruptEventData | null>(null);
+  const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
@@ -80,10 +83,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     });
   }, []);
 
-  const handleSend = async (messageOverride?: string) => {
+  const handleSend = async (messageOverride?: string, interruptResponse?: { decisions: Array<{ type: "approve" | "reject" | "edit"; editedAction?: { name: string; args: Record<string, unknown> }; message?: string }> } ) => {
     const messageToSend = messageOverride || inputValue;
 
-    if (!messageToSend.trim() || !selectedScenario || isLoading) {
+    // Allow sending if we have a message OR if we're resuming from an interrupt
+    if ((!messageToSend.trim() && !interruptResponse) || !selectedScenario || isLoading) {
       return;
     }
 
@@ -95,10 +99,13 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       return;
     }
 
-    const userMessage = new HumanMessage(messageToSend);
+    // Only add user message if not resuming from interrupt
+    if (!interruptResponse && messageToSend.trim()) {
+      const userMessage = new HumanMessage(messageToSend);
+      setMessages((prev) => [...prev, userMessage]);
+      setInputValue("");
+    }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
     setIsLoading(true);
 
     // Track current AI message ID - will be updated when we detect a new message
@@ -111,13 +118,24 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         ? "/api/hitl"
         : "/api/basic";
 
+      // Generate or use existing thread ID
+      const threadId = currentThreadId || `thread-${Date.now()}`;
+      if (!currentThreadId) {
+        setCurrentThreadId(threadId);
+      }
+
       // Send request to API
       const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: messageToSend, apiKey }),
+        body: JSON.stringify({
+          message: messageToSend,
+          apiKey,
+          threadId,
+          interruptResponse: interruptResponse ? JSON.stringify(interruptResponse) : undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -130,16 +148,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
       // Reset current assistant ID
       accumulatedContentByMessageRef.clear();
-
-      // Helper function to extract tool calls from AIMessageChunk
-      const extractToolCallsFromMessage = (msg: AIMessageChunk): ToolCall[] => {
-        if (msg.kwargs?.tool_calls && Array.isArray(msg.kwargs.tool_calls)) {
-          return msg.kwargs.tool_calls.filter((tc): tc is ToolCall =>
-            tc && typeof tc === "object" && "name" in tc && "args" in tc && "id" in tc
-          );
-        }
-        return [];
-      };
 
       // Helper function to update tool call state with tool message result
       const updateToolCallWithMessage = (toolMsg: ToolMessageData) => {
@@ -271,24 +279,26 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         }
       };
 
-      // Helper function to process tools events (tool results)
-      const processTools = (data: ToolsEventData) => {
-        const toolMessages = data.tools?.messages || [];
-        for (const toolMsg of toolMessages) {
-          updateToolCallWithMessage(toolMsg);
-        }
-      };
-
       readStream(response, {
         update: (data: UpdateData) => {
           // Process update events which contain streaming AIMessageChunk data
           processUpdate(data);
         },
         tools: (data: ToolsEventData) => {
-          processTools(data);
+          const toolMessages = data.tools?.messages || [];
+          for (const toolMsg of toolMessages) {
+            updateToolCallWithMessage(toolMsg);
+          }
         },
         model_request: (data: ModelRequestEventData) => {
           updateToolCallArgs(data);
+        },
+        interrupt: (data: InterruptEventData) => {
+          // Handle interrupt event - show bubble for user approval
+          if (data && Array.isArray(data.action_requests) && data.action_requests.length > 0) {
+            setInterruptData(data);
+            setIsLoading(false); // Pause loading while waiting for user decision
+          }
         },
         end: () => {
           // Ensure all content is displayed when stream ends
@@ -301,6 +311,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
               return msg;
             })
           );
+          setIsLoading(false);
         },
         error: (error: Error) => {
           const errorMessage = error.message || "Unknown error occurred";
@@ -311,6 +322,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                 : msg
             )
           );
+          setIsLoading(false);
         },
       });
 
@@ -337,8 +349,60 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         )
       );
     } finally {
-      setIsLoading(false);
+      // Don't set loading to false here if we're showing interrupt bubble
+      // It will be set to false when user responds
+      if (!interruptData) {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const handleInterruptApprove = async () => {
+    if (!interruptData) return;
+
+    const interruptResponse = {
+      decisions: [{
+        type: "approve" as const,
+      }],
+    };
+
+    setInterruptData(null);
+    setIsLoading(true);
+    await handleSend("", interruptResponse);
+  };
+
+  const handleInterruptReject = async (message?: string) => {
+    if (!interruptData) return;
+
+    const interruptResponse = {
+      decisions: [{
+        type: "reject" as const,
+        ...(message ? { message } : {}),
+      }],
+    };
+
+    setInterruptData(null);
+    setIsLoading(true);
+    await handleSend("", interruptResponse);
+  };
+
+  const handleInterruptEdit = async (editedArgs: Record<string, unknown>) => {
+    if (!interruptData) return;
+
+    const actionRequest = interruptData.action_requests[0];
+    const interruptResponse = {
+      decisions: [{
+        type: "edit" as const,
+        editedAction: {
+          name: actionRequest.name,
+          args: editedArgs,
+        },
+      }],
+    };
+
+    setInterruptData(null);
+    setIsLoading(true);
+    await handleSend("", interruptResponse);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -396,6 +460,15 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                 </div>
               );
             })}
+            {/* Interrupt Bubble - shown below messages when interrupt occurs */}
+            {interruptData && (
+              <InterruptBubble
+                interruptData={interruptData}
+                onApprove={handleInterruptApprove}
+                onReject={handleInterruptReject}
+                onEdit={handleInterruptEdit}
+              />
+            )}
           </div>
         )}
       </div>
@@ -510,6 +583,8 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
             callbacks.model_request?.(data as ModelRequestEventData);
           } else if (currentEventType === "tools") {
             callbacks.tools?.(data as ToolsEventData);
+          } else if (currentEventType === "interrupt") {
+            callbacks.interrupt?.(data as InterruptEventData);
           } else {
             if (!(currentEventType in callbacks)) {
               throw new Error(`Unknown event type: ${currentEventType}`);
@@ -562,4 +637,14 @@ const extractIncrementalTextFromChunk = (msg: AIMessageChunk): string | null => 
   }
 
   return null;
+};
+
+// Helper function to extract tool calls from AIMessageChunk
+const extractToolCallsFromMessage = (msg: AIMessageChunk): ToolCall[] => {
+  if (msg.kwargs?.tool_calls && Array.isArray(msg.kwargs.tool_calls)) {
+    return msg.kwargs.tool_calls.filter((tc): tc is ToolCall =>
+      tc && typeof tc === "object" && "name" in tc && "args" in tc && "id" in tc
+    );
+  }
+  return [];
 };
