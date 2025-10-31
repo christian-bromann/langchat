@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { message } = body;
+    const { message, apiKey } = body;
 
     if (!message) {
       return new Response(
@@ -28,8 +28,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Missing API key" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // Get the agent stream
-    const agentStream = await basicAgent({ message });
+    const agentStream = await basicAgent({ message, apiKey });
 
     // Set up headers for SSE
     const headers = new Headers({

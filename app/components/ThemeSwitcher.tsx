@@ -50,7 +50,7 @@ export default function ThemeSwitcher() {
   };
 
   return (
-    <div className="p-6 pt-4 mt-auto">
+    <div className="p-6 pt-[15px] mt-auto border-t border-gray-200 dark:border-gray-800">
       <button
         type="button"
         onClick={handleToggle}

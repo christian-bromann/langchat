@@ -12,9 +12,10 @@ interface Message {
 
 interface ChatInterfaceProps {
   selectedScenario: string | null;
+  apiKey: string;
 }
 
-export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) {
+export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +41,19 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
 
   const handleSend = async () => {
     if (!inputValue.trim() || !selectedScenario || isLoading) {
+      return;
+    }
+
+    if (!apiKey.trim()) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "⚠️ Please enter your Anthropic API key in the sidebar to use this app.",
+          timestamp: new Date(),
+        },
+      ]);
       return;
     }
 
@@ -75,7 +89,7 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: messageToSend }),
+        body: JSON.stringify({ message: messageToSend, apiKey }),
       });
 
       if (!response.ok) {
@@ -339,7 +353,7 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
 
       {/* Input Area */}
       <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
-        <div className="max-w-3xl mx-auto px-6 py-4">
+        <div className="max-w-3xl mx-auto px-6 py-[14px]">
           {/* Input Box */}
           <div className="flex items-start gap-3">
             <div className="flex-1 relative">
