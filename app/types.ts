@@ -67,6 +67,29 @@ export interface AIAdditionalKwargs {
   [key: string]: unknown;
 }
 
+// Tool call structure
+export interface ToolCall {
+  name: string;
+  args: Record<string, unknown>;
+  id: string;
+  type: "tool_call";
+}
+
+// ToolMessage structure (from LangChain stream)
+export interface ToolMessageData extends LangChainMessage {
+  id: ["langchain_core", "messages", "ToolMessage"];
+  kwargs: {
+    status: "success" | "error";
+    content: string;
+    tool_call_id: string;
+    name: string;
+    metadata: Record<string, unknown>;
+    additional_kwargs: Record<string, unknown>;
+    response_metadata: Record<string, unknown>;
+    id: string;
+  };
+}
+
 // AIMessageChunk structure
 export interface AIMessageChunk extends LangChainMessage {
   id: ["langchain_core", "messages", "AIMessageChunk"];
@@ -77,7 +100,7 @@ export interface AIMessageChunk extends LangChainMessage {
     response_metadata: ResponseMetadata;
     id: string;
     usage_metadata?: UsageMetadata;
-    tool_calls: unknown[];
+    tool_calls: ToolCall[];
     invalid_tool_calls: unknown[];
     name?: string;
   };
@@ -105,7 +128,7 @@ export type ChunkUpdateData = [AIMessageChunk, LangGraphMetadata];
 
 // Messages update data structure
 export interface MessagesUpdateData {
-  messages: (HumanMessage | AIMessageChunk)[];
+  messages: (HumanMessage | AIMessageChunk | ToolMessageData)[];
 }
 
 // Private state structure
@@ -122,9 +145,16 @@ export interface ModelRequestUpdateData {
   };
 }
 
+// Tools update data structure
+export interface ToolsUpdateData {
+  tools: {
+    messages: ToolMessageData[];
+  };
+}
+
 // Full update data structure (with private state)
 export interface FullUpdateData {
-  messages: (HumanMessage | AIMessageChunk)[];
+  messages: (HumanMessage | AIMessageChunk | ToolMessageData)[];
   _privateState: PrivateState;
 }
 
@@ -133,7 +163,8 @@ export type UpdateData =
   | MessagesUpdateData
   | ChunkUpdateData
   | ModelRequestUpdateData
-  | FullUpdateData;
+  | FullUpdateData
+  | ToolsUpdateData;
 
 // End event data structure
 export interface EndEventData {
@@ -150,5 +181,20 @@ export interface AgentEventData {
   [key: string]: unknown;
 }
 
+// Tool call event data structure
+export interface ToolCallEventData {
+  toolCall: ToolCall;
+  toolMessage?: ToolMessageData;
+}
+
+// Agent state event data structure (full state with messages array)
+export type AgentStateEventData = FullUpdateData;
+
+// Model request event data structure
+export type ModelRequestEventData = ModelRequestUpdateData;
+
+// Tools event data structure
+export type ToolsEventData = ToolsUpdateData;
+
 // Union type for all event data structures
-export type EventData = UpdateData | EndEventData;
+export type EventData = UpdateData | EndEventData | AgentStateEventData | ModelRequestEventData | ToolsEventData;

@@ -92,6 +92,10 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
                 } else {
                   eventData = values.__interrupt__;
                 }
+              } else {
+                // Check data structure to determine event type
+                eventType = determineEventTypeFromPayload(payload);
+                eventData = payload;
               }
             } else if (updateType === "updates" && typeof payload === "object" && payload !== null) {
               const updates = payload as LangChainUpdate;
@@ -120,9 +124,19 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
                 } else {
                   eventData = updates.__interrupt__;
                 }
-              } else if (updates.agent && updates.agent.messages) {
-                // Filter to only AI messages
-                const filteredAiMessages = updates.agent.messages.filter((msg: LangChainMessage) => {
+              } else {
+                // Check data structure to determine event type
+                eventType = determineEventTypeFromPayload(payload);
+                eventData = payload;
+              }
+            } else if (updateType === "messages" && Array.isArray(payload)) {
+              // Check if it's a chunk update (array of [AIMessageChunk, LangGraphMetadata])
+              if (payload.length === 2 && payload[0]?.lc === 1 && payload[1]?.langgraph_node) {
+                eventType = "model_request";
+                eventData = { model_request: { messages: [payload[0]], _privateState: {} as any } };
+              } else {
+                // Filter to only AI messages to avoid sending user messages back
+                const aiMessages = payload.filter((msg: LangChainMessage) => {
                   return (
                     msg.lc === 1 &&
                     msg.id &&
@@ -132,26 +146,16 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
                   );
                 });
 
-                if (filteredAiMessages.length > 0) {
+                if (aiMessages.length > 0) {
                   eventType = "agent";
-                  eventData = { messages: filteredAiMessages };
+                  eventData = { messages: aiMessages };
                 }
               }
-            } else if (updateType === "messages" && Array.isArray(payload)) {
-              // Filter to only AI messages to avoid sending user messages back
-              const aiMessages = payload.filter((msg: LangChainMessage) => {
-                return (
-                  msg.lc === 1 &&
-                  msg.id &&
-                  msg.id[0] === "langchain_core" &&
-                  msg.id[1] === "messages" &&
-                  (msg.id[2] === "AIMessageChunk" || msg.id[2] === "AIMessage")
-                );
-              });
-
-              if (aiMessages.length > 0) {
-                eventType = "agent";
-                eventData = { messages: aiMessages };
+            } else {
+              // For other update types, check data structure
+              if (typeof payload === "object" && payload !== null) {
+                eventType = determineEventTypeFromPayload(payload);
+                eventData = payload;
               }
             }
 
@@ -181,4 +185,49 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
     }),
     { headers }
   );
+}
+
+/**
+ * Determines the event type based on the payload structure
+ */
+function determineEventTypeFromPayload(payload: unknown): EventType {
+  if (typeof payload !== "object" || payload === null) {
+    return "update";
+  }
+
+  const data = payload as Record<string, unknown>;
+  const keys = Object.keys(data);
+
+  // Check for agent_state: has "messages" key (and optionally "_privateState")
+  if (keys.includes("messages") && Array.isArray(data.messages)) {
+    return "agent_state";
+  }
+
+  // Check for model_request: single "model_request" key
+  if (keys.length === 1 && keys[0] === "model_request" && data.model_request) {
+    return "model_request";
+  }
+
+  // Check for tools: single "tools" key
+  if (keys.length === 1 && keys[0] === "tools" && data.tools) {
+    return "tools";
+  }
+
+  // Check for chunk update: array of [AIMessageChunk, LangGraphMetadata]
+  if (Array.isArray(payload) && payload.length === 2) {
+    const first = payload[0] as unknown;
+    const second = payload[1] as unknown;
+    if (
+      typeof first === "object" &&
+      first !== null &&
+      "lc" in first &&
+      typeof second === "object" &&
+      second !== null &&
+      "langgraph_node" in second
+    ) {
+      return "model_request";
+    }
+  }
+
+  return "update";
 }

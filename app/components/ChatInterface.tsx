@@ -6,28 +6,31 @@ import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
 
 import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
-import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ChunkUpdateData } from "@/app/types";
+import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, ToolCallEventData, AgentStateEventData, ModelRequestEventData, ToolsEventData } from "@/app/types";
+import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
   apiKey: string;
 }
 
-function isAIMessageOrAIMessageChunk(msg: unknown): boolean {
-  const m = msg as { id?: string[]; lc?: number; [key: string]: unknown };
-  return !!(
-    m.lc === 1 &&
-    m.id &&
-    m.id[0] === "langchain_core" &&
-    m.id[1] === "messages" &&
-    (m.id[2] === "AIMessageChunk" || m.id[2] === "AIMessage")
-  );
+function isAIMessageChunk(chunk: unknown): boolean {
+  return Boolean(
+    chunk &&
+    typeof chunk === "object" &&
+    "lc" in chunk &&
+    "kwargs" in chunk &&
+    "id" in chunk &&
+    Array.isArray(chunk.id) &&
+    chunk.id[2] === "AIMessageChunk"
+  )
 }
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<BaseMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [toolCalls, setToolCalls] = useState<Map<string, ToolCallState>>(new Map());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
@@ -69,12 +72,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setInputValue("");
     setIsLoading(true);
 
-    // Create assistant message placeholder
-    const assistantId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, new AIMessage({
-      id: assistantId,
-      content: "",
-    })]);
+    // Track current AI message ID - will be updated when we detect a new message
+    let currentAssistantId = (Date.now() + 1).toString();
+    const accumulatedContentByMessageRef = new Map<string, string>();
 
     try {
       // Determine API endpoint - use basic for now
@@ -94,59 +94,146 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         throw new Error(`HTTP error! status: ${response.status}: ${errorText}`);
       }
 
-      let hasReceivedData = false;
-
       // Reset refs for this stream
       accumulatedContentRef.current = "";
+      setToolCalls(new Map());
 
-      // Helper function to process update data
-      const processUpdateData = (data: UpdateData) => {
-        // Extract messages from the update data
-        const messagesToProcess = extractMessagesFromUpdateData(data);
+      // Reset current assistant ID
+      accumulatedContentByMessageRef.clear();
 
-        if (messagesToProcess.length > 0) {
-          // Check if this is a final summary message (contains full accumulated content)
-          const firstMsg = messagesToProcess[0];
-          const content = extractContentFromMessage(firstMsg);
+      // Helper function to extract tool calls from AIMessageChunk
+      const extractToolCallsFromMessage = (msg: AIMessageChunk): ToolCall[] => {
+        if (msg.kwargs?.tool_calls && Array.isArray(msg.kwargs.tool_calls)) {
+          return msg.kwargs.tool_calls.filter((tc): tc is ToolCall =>
+            tc && typeof tc === "object" && "name" in tc && "args" in tc && "id" in tc
+          );
+        }
+        return [];
+      };
 
-          // Skip if this content matches or starts with what we've already accumulated
-          // This indicates it's a final summary, not an incremental chunk
-          if (content && accumulatedContentRef.current.length > 0) {
-            const accumulated = accumulatedContentRef.current;
-            if (
-              content === accumulated ||
-              (content.length >= accumulated.length && content.startsWith(accumulated))
-            ) {
-              return;
+      // Helper function to process update events (streaming AIMessageChunk data)
+      const processUpdate = (data: UpdateData) => {
+        // Check if this is a chunk update (array of [AIMessageChunk, LangGraphMetadata])
+        const hasAIMessageChunk = Array.isArray(data) && data.length === 2 && isAIMessageChunk(data[0])
+        if (!hasAIMessageChunk) {
+          return;
+        }
+        const msg = data[0] as AIMessageChunk;
+        const msgId = msg.kwargs?.id as string | undefined;
+        const messageId = msgId || currentAssistantId;
+
+        // Check if this is a new AI message (different ID)
+        if (msgId && msgId !== currentAssistantId) {
+          currentAssistantId = msgId;
+
+          // Create a new AI message bubble if it doesn't exist
+          setMessages((prev) => {
+            const exists = prev.some(m => m.id === msgId);
+            if (!exists) {
+              return [...prev, new AIMessage({
+                id: msgId,
+                content: "",
+              })];
             }
+            return prev;
+          });
+
+          // Initialize accumulated content for this message
+          if (!accumulatedContentByMessageRef.has(msgId)) {
+            accumulatedContentByMessageRef.set(msgId, "");
+          }
+        }
+
+        // Extract text content from the chunk
+        const chunkText = extractIncrementalTextFromChunk(msg);
+
+        if (chunkText !== null && chunkText !== "") {
+          const currentAccumulated = accumulatedContentByMessageRef.get(messageId) || "";
+
+          // Determine if this is incremental (append) or full replacement
+          let updatedContent: string;
+          // If no accumulated content yet, always treat as incremental (first chunk)
+          if (!currentAccumulated) {
+            updatedContent = chunkText;
+          } else if (chunkText.startsWith(currentAccumulated) && chunkText.length > currentAccumulated.length) {
+            // Full replacement: chunk contains accumulated + new text
+            updatedContent = chunkText;
+          } else if (chunkText === currentAccumulated) {
+            // Duplicate chunk, skip
+            return;
+          } else {
+            // Incremental chunk: append new text to accumulated
+            updatedContent = currentAccumulated + chunkText;
           }
 
-          // Process each AI message chunk
-          for (const msg of messagesToProcess) {
-            const newContent = extractContentFromMessage(msg);
+          // Only update if content actually changed
+          if (updatedContent !== currentAccumulated) {
+            accumulatedContentByMessageRef.set(messageId, updatedContent);
 
-            // Process incremental content chunks
-            // Each chunk contains only the new content, not accumulated content
-            if (newContent !== undefined && newContent !== null && newContent.length > 0) {
-              // Append the incremental chunk to accumulated content
-              accumulatedContentRef.current += newContent;
-              // Immediately update UI with the accumulated content (real-time streaming)
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantId
-                    ? new AIMessage({ ...msg, content: accumulatedContentRef.current })
-                    : msg
-                )
-              );
+            // Immediately update UI with the accumulated content (real-time streaming)
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === messageId
+                  ? new AIMessage({ ...m, content: updatedContent })
+                  : m
+              )
+            );
+          }
+        }
+
+        // Extract tool calls from the message
+        const toolCallsFromMsg = extractToolCallsFromMessage(msg);
+        const associatedMessageId = msgId || currentAssistantId;
+        for (const toolCall of toolCallsFromMsg) {
+          setToolCalls((prev) => {
+            const newMap = new Map(prev);
+            if (!newMap.has(toolCall.id)) {
+              newMap.set(toolCall.id, {
+                toolCall,
+                aiMessageId: associatedMessageId,
+                timestamp: Date.now()
+              });
             }
+            return newMap;
+          });
+        }
+      };
+
+      // Helper function to process tools events (tool results)
+      const processTools = (data: ToolsEventData) => {
+        const toolMessages = data.tools?.messages || [];
+        for (const toolMsg of toolMessages) {
+          const toolCallId = toolMsg.kwargs?.tool_call_id as string;
+          if (toolCallId) {
+            setToolCalls((prev) => {
+              const newMap = new Map(prev);
+              const existing = newMap.get(toolCallId);
+              if (existing) {
+                newMap.set(toolCallId, { ...existing, toolMessage: toolMsg });
+              } else {
+                // If we haven't seen the tool call yet, create a placeholder
+                newMap.set(toolCallId, {
+                  toolCall: {
+                    id: toolCallId,
+                    name: toolMsg.kwargs?.name as string || "unknown",
+                    args: {},
+                    type: "tool_call"
+                  },
+                  toolMessage: toolMsg,
+                  aiMessageId: currentAssistantId,
+                  timestamp: Date.now()
+                });
+              }
+              return newMap;
+            });
           }
         }
       };
 
       readStream(response, {
         update: (data: UpdateData) => {
-          hasReceivedData = true;
-          processUpdateData(data);
+          // Process update events which contain streaming AIMessageChunk data
+          processUpdate(data);
         },
         interrupt: () => {
           // Handle interrupt events if needed
@@ -154,21 +241,45 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         agent: () => {
           // Handle agent events if needed
         },
+        agent_state: () => {
+          // handle agent state events if needed
+        },
+        model_request: () => {
+          // processModelRequest(data);
+        },
+        tools: (data: ToolsEventData) => {
+          processTools(data);
+        },
+        tool_call: (data: ToolCallEventData) => {
+          setToolCalls((prev) => {
+            const newMap = new Map(prev);
+            const existing = newMap.get(data.toolCall.id);
+            newMap.set(data.toolCall.id, {
+              toolCall: data.toolCall,
+              toolMessage: data.toolMessage || existing?.toolMessage,
+              aiMessageId: existing?.aiMessageId || currentAssistantId,
+              timestamp: existing?.timestamp || Date.now()
+            });
+            return newMap;
+          });
+        },
         end: () => {
           // Ensure all content is displayed when stream ends
           setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantId
-                ? new AIMessage({ ...msg, content: accumulatedContentRef.current })
-                : msg
-            )
+            prev.map((msg) => {
+              const msgAccumulated = accumulatedContentByMessageRef.get(msg.id || "") || "";
+              if (msgAccumulated && msgAccumulated !== msg.content) {
+                return new AIMessage({ ...msg, content: msgAccumulated });
+              }
+              return msg;
+            })
           );
         },
         error: (error: Error) => {
           const errorMessage = error.message || "Unknown error occurred";
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantId
+              msg.id === currentAssistantId
                 ? new AIMessage({ ...msg, content: `Error: ${errorMessage}` })
                 : msg
             )
@@ -178,27 +289,19 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
       // Ensure all content is displayed when stream ends
       setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantId
-            ? new AIMessage({ ...msg, content: accumulatedContentRef.current })
-            : msg
-        )
+        prev.map((msg) => {
+          const msgAccumulated = accumulatedContentByMessageRef.get(msg.id || "") || "";
+          if (msgAccumulated && msgAccumulated !== msg.content) {
+            return new AIMessage({ ...msg, content: msgAccumulated });
+          }
+          return msg;
+        })
       );
-
-      if (!hasReceivedData) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantId
-              ? new AIMessage({ ...msg, content: "No response received from the agent." })
-              : msg
-          )
-        );
-      }
     } catch (error) {
       console.error("Error sending message:", error);
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === assistantId
+          msg.id === currentAssistantId
             ? new AIMessage({
                 ...msg,
                 content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
@@ -228,29 +331,46 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6">
-            {messages.map((message) => (
-              <div
-                key={message.id || Date.now()}
-                className={`flex ${
-                  HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                    HumanMessage.isInstance(message)
-                      ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                      : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">
-                    {message.content as string}
-                    {AIMessage.isInstance(message) && isLoading && message.content === "" && (
-                      <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
-                    )}
-                  </p>
+            {messages.map((message, messageIndex) => {
+              // Get tool calls associated with this AI message
+              const associatedToolCalls = AIMessage.isInstance(message) && message.id
+                ? Array.from(toolCalls.values())
+                    .filter((tc) => tc.aiMessageId === message.id)
+                    .sort((a, b) => a.timestamp - b.timestamp)
+                : [];
+
+              console.log(11, message, associatedToolCalls, toolCalls)
+
+              return (
+                <div key={message.id || messageIndex}>
+                  {/* Message */}
+                  <div
+                    className={`flex ${
+                      HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                        HumanMessage.isInstance(message)
+                          ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+                          : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap">
+                        {message.content as string}
+                        {AIMessage.isInstance(message) && isLoading && message.content === "" && (
+                          <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Tool calls associated with this message */}
+                  {associatedToolCalls.map((toolCallState) => (
+                    <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
+                  ))}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -297,6 +417,10 @@ interface StreamEventCallbacks {
   update: (data: UpdateData) => void;
   interrupt: (data: InterruptEventData) => void;
   agent: (data: AgentEventData) => void;
+  agent_state: (data: AgentStateEventData) => void;
+  model_request: (data: ModelRequestEventData) => void;
+  tools: (data: ToolsEventData) => void;
+  tool_call: (data: ToolCallEventData) => void;
   end: () => void;
   error: (error: Error) => void;
 }
@@ -358,12 +482,19 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
             // Convert error data to Error object
             const errorMessage = typeof data === "string" ? data : data?.error || "Unknown error occurred";
             callbacks.error(new Error(errorMessage));
+          } else if (currentEventType === "agent_state") {
+            callbacks.agent_state(data as AgentStateEventData);
+          } else if (currentEventType === "model_request") {
+            callbacks.model_request(data as ModelRequestEventData);
+          } else if (currentEventType === "tools") {
+            callbacks.tools(data as ToolsEventData);
+          } else if (currentEventType === "tool_call") {
+            callbacks.tool_call(data as ToolCallEventData);
           } else {
             if (!(currentEventType in callbacks)) {
               throw new Error(`Unknown event type: ${currentEventType}`);
             }
 
-            // For update, interrupt, and agent events, pass the data
             callbacks[currentEventType](data);
           }
         } catch (error) {
@@ -380,54 +511,35 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
   }
 }
 
-// Helper function to extract messages from different update data formats
-const extractMessagesFromUpdateData = (data: UpdateData): AIMessageChunk[] => {
-  // Check if it's a ChunkUpdateData (array format)
-  if (Array.isArray(data)) {
-    // ChunkUpdateData is [AIMessageChunk, LangGraphMetadata]
-    const chunkData = data as ChunkUpdateData;
-    return [chunkData[0]];
+// Helper function to extract incremental text from AIMessageChunk content array
+// This extracts only the new text from content items of type "text"
+const extractIncrementalTextFromChunk = (msg: AIMessageChunk): string | null => {
+  if (!msg.kwargs?.content) {
+    return null;
   }
 
-  // Check if it's MessagesUpdateData
-  if ("messages" in data && Array.isArray(data.messages)) {
-    return data.messages.filter(isAIMessageOrAIMessageChunk) as AIMessageChunk[];
+  const content = msg.kwargs.content;
+
+  // If content is a string, return it
+  if (typeof content === "string") {
+    return content;
   }
 
-  // Check if it's ModelRequestUpdateData
-  if ("model_request" in data && data.model_request?.messages) {
-    return data.model_request.messages;
-  }
-
-  // Check if it's FullUpdateData
-  if ("messages" in data && "_privateState" in data && Array.isArray(data.messages)) {
-    return data.messages.filter(isAIMessageOrAIMessageChunk) as AIMessageChunk[];
-  }
-
-  return [];
-};
-
-// Helper function to extract content from AIMessageChunk
-const extractContentFromMessage = (msg: AIMessageChunk): string => {
-  let content = "";
-
-  // Try to get content from kwargs.content first
-  if (msg.kwargs?.content !== undefined) {
-    const kwargsContent = msg.kwargs.content;
-    if (typeof kwargsContent === "string") {
-      content = kwargsContent;
-    } else if (Array.isArray(kwargsContent)) {
-      content = (kwargsContent as unknown[])
-        .map((item: unknown) => {
-          if (typeof item === "string") return item;
-          if (item && typeof item === "object" && "text" in item) {
-            return String((item as { text: string }).text);
-          }
-          return "";
-        })
-        .join("");
+  // If content is an array, extract text from text-type items
+  if (Array.isArray(content)) {
+    let text = "";
+    for (const item of content as unknown[]) {
+      if (item && typeof item === "object") {
+        // Handle text content items: {"index": 0, "type": "text", "text": "I can"}
+        if ("type" in item && item.type === "text" && "text" in item) {
+          text += String((item as { text: string }).text);
+        }
+        // Handle input_json_delta items (tool call arguments) - skip these for text display
+        // These are: {"index": 1, "type": "input_json_delta", "input": "..."}
+      }
     }
+    return text || null;
   }
 
-  return content;
+  return null;
 };
