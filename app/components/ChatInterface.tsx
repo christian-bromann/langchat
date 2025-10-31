@@ -27,7 +27,7 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
       const scrollHeight = textareaRef.current.scrollHeight;
       const newHeight = Math.min(scrollHeight, 200);
       textareaRef.current.style.height = `${newHeight}px`;
-      
+
       // Sync button height to match textarea's actual height
       if (buttonRef.current) {
         const height = textareaRef.current.offsetHeight;

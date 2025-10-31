@@ -1,5 +1,16 @@
 {
   "name": "langchat",
+  "description": "A sandbox for showcasing different use cases of LangChain's createAgent",
+  "author": "Christian Bromann <mail@bromann.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/christian-bromann/langchat"
+  },
+  "homepage": "https://github.com/christian-bromann/langchat",
+  "bugs": {
+    "url": "https://github.com/christian-bromann/langchat/issues"
+  },
   "version": "0.1.0",
   "private": true,
   "scripts": {
