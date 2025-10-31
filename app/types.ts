@@ -181,12 +181,6 @@ export interface AgentEventData {
   [key: string]: unknown;
 }
 
-// Tool call event data structure
-export interface ToolCallEventData {
-  toolCall: ToolCall;
-  toolMessage?: ToolMessageData;
-}
-
 // Agent state event data structure (full state with messages array)
 export type AgentStateEventData = FullUpdateData;
 

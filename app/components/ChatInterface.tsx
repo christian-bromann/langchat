@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
 
 import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
-import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, ToolCallEventData, AgentStateEventData, ModelRequestEventData, ToolsEventData } from "@/app/types";
+import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData } from "@/app/types";
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 
 interface ChatInterfaceProps {
@@ -50,6 +50,23 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       }
     }
   }, [inputValue]);
+
+  const updateToolCallArgs = useCallback((modelRequest: ModelRequestEventData) => {
+    const tc = modelRequest.model_request.messages
+      .find((msg) => msg.kwargs.tool_calls)?.kwargs.tool_calls || [] as ToolCall[];
+
+    setToolCalls((prevToolCalls) => {
+      const newMap = new Map<string, ToolCallState>();
+      for (const [id, toolCall] of prevToolCalls) {
+        const updatedToolCall = tc.find((tc) => tc.id === id);
+        newMap.set(id, updatedToolCall ? {
+          ...toolCall,
+          toolCall: updatedToolCall
+        } : toolCall);
+      }
+      return newMap;
+    });
+  }, []);
 
   const handleSend = async (messageOverride?: string) => {
     const messageToSend = messageOverride || inputValue;
@@ -96,7 +113,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
       // Reset refs for this stream
       accumulatedContentRef.current = "";
-      setToolCalls(new Map());
 
       // Reset current assistant ID
       accumulatedContentByMessageRef.clear();
@@ -235,33 +251,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           // Process update events which contain streaming AIMessageChunk data
           processUpdate(data);
         },
-        interrupt: () => {
-          // Handle interrupt events if needed
-        },
-        agent: () => {
-          // Handle agent events if needed
-        },
-        agent_state: () => {
-          // handle agent state events if needed
-        },
-        model_request: () => {
-          // processModelRequest(data);
-        },
         tools: (data: ToolsEventData) => {
           processTools(data);
         },
-        tool_call: (data: ToolCallEventData) => {
-          setToolCalls((prev) => {
-            const newMap = new Map(prev);
-            const existing = newMap.get(data.toolCall.id);
-            newMap.set(data.toolCall.id, {
-              toolCall: data.toolCall,
-              toolMessage: data.toolMessage || existing?.toolMessage,
-              aiMessageId: existing?.aiMessageId || currentAssistantId,
-              timestamp: existing?.timestamp || Date.now()
-            });
-            return newMap;
-          });
+        model_request: (data: ModelRequestEventData) => {
+          updateToolCallArgs(data);
         },
         end: () => {
           // Ensure all content is displayed when stream ends
@@ -339,8 +333,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                     .sort((a, b) => a.timestamp - b.timestamp)
                 : [];
 
-              console.log(11, message, associatedToolCalls, toolCalls)
-
               return (
                 <div key={message.id || messageIndex}>
                   {/* Message */}
@@ -414,15 +406,14 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 }
 
 interface StreamEventCallbacks {
-  update: (data: UpdateData) => void;
-  interrupt: (data: InterruptEventData) => void;
-  agent: (data: AgentEventData) => void;
-  agent_state: (data: AgentStateEventData) => void;
-  model_request: (data: ModelRequestEventData) => void;
-  tools: (data: ToolsEventData) => void;
-  tool_call: (data: ToolCallEventData) => void;
-  end: () => void;
-  error: (error: Error) => void;
+  update?: (data: UpdateData) => void;
+  interrupt?: (data: InterruptEventData) => void;
+  agent?: (data: AgentEventData) => void;
+  agent_state?: (data: AgentStateEventData) => void;
+  model_request?: (data: ModelRequestEventData) => void;
+  tools?: (data: ToolsEventData) => void;
+  end?: () => void;
+  error?: (error: Error) => void;
 }
 
 /**
@@ -463,7 +454,6 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
 
       if (line.startsWith("event: ")) {
         currentEventType = line.slice(7).trim() as EventType;
-
         if (!EVENT_TYPES.includes(currentEventType)) {
           throw new Error(`Unknown event type: ${currentEventType}`);
         }
@@ -474,33 +464,30 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
         const dataStr = line.slice(6);
         try {
           const data = JSON.parse(dataStr);
-
           // Handle different event types with appropriate callbacks
           if (currentEventType === "end") {
-            callbacks.end();
+            callbacks.end?.();
           } else if (currentEventType === "error") {
             // Convert error data to Error object
             const errorMessage = typeof data === "string" ? data : data?.error || "Unknown error occurred";
-            callbacks.error(new Error(errorMessage));
+            callbacks.error?.(new Error(errorMessage));
           } else if (currentEventType === "agent_state") {
-            callbacks.agent_state(data as AgentStateEventData);
+            callbacks.agent_state?.(data as AgentStateEventData);
           } else if (currentEventType === "model_request") {
-            callbacks.model_request(data as ModelRequestEventData);
+            callbacks.model_request?.(data as ModelRequestEventData);
           } else if (currentEventType === "tools") {
-            callbacks.tools(data as ToolsEventData);
-          } else if (currentEventType === "tool_call") {
-            callbacks.tool_call(data as ToolCallEventData);
+            callbacks.tools?.(data as ToolsEventData);
           } else {
             if (!(currentEventType in callbacks)) {
               throw new Error(`Unknown event type: ${currentEventType}`);
             }
 
-            callbacks[currentEventType](data);
+            callbacks[currentEventType]?.(data);
           }
         } catch (error) {
           console.error("Error parsing stream data:", error);
           // If parsing fails, treat it as an error event
-          callbacks.error(error instanceof Error ? error : new Error("Failed to parse stream data"));
+          callbacks.error?.(error instanceof Error ? error : new Error("Failed to parse stream data"));
         }
 
         continue;
