@@ -94,8 +94,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     const accumulatedContentByMessageRef = new Map<string, string>();
 
     try {
-      // Determine API endpoint - use basic for now
-      const apiEndpoint = "/api/basic";
+      // Determine API endpoint based on selected scenario
+      const apiEndpoint = selectedScenario === "human-in-the-loop"
+        ? "/api/hitl"
+        : "/api/basic";
 
       // Send request to API
       const response = await fetch(apiEndpoint, {

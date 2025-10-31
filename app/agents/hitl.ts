@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { createAgent, HumanMessage, tool, humanInTheLoopMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { Command } from "@langchain/langgraph";
@@ -8,6 +9,24 @@ import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";
  */
 // Shared checkpointer instance using Redis
 let checkpointer: RedisSaver | null = null;
+
+const ADDRESS_BOOK = {
+  "1234567890": {
+    name: "John Doe",
+    email: "john.doe@example.com",
+    phone: "+1 234-567-8900",
+  },
+  "1234567891": {
+    name: "Jane Doe",
+    email: "jane.doe@example.com",
+    phone: "+1 234-567-8901",
+  },
+  "1234567892": {
+    name: "Jim Doe",
+    email: "jim.doe@example.com",
+    phone: "+1 234-567-8902",
+  },
+};
 
 async function getCheckpointer() {
   if (!checkpointer) {
@@ -47,86 +66,37 @@ export async function hitlAgent(options: {
   });
 
   // Create email tools
-  const writeEmailTool = tool(
-    async (input: unknown) => {
-      const { recipient, subject, body } = input as {
-        recipient: string;
-        subject: string;
-        body: string;
-      };
-      return {
-        success: true,
-        draft: {
-          recipient,
-          subject,
-          body,
-        },
-      };
+  const getUserEmail = tool(
+    async (input) => {
+      return ADDRESS_BOOK[input.user_id as keyof typeof ADDRESS_BOOK];
     },
     {
-      name: "write_email",
-      description: "Draft an email to someone. Use this to compose the email content.",
-      schema: {
-        type: "object",
-        properties: {
-          recipient: {
-            type: "string",
-            description: "The email address of the recipient",
-          },
-          subject: {
-            type: "string",
-            description: "The subject line of the email",
-          },
-          body: {
-            type: "string",
-            description: "The body content of the email",
-          },
-        },
-        required: ["recipient", "subject", "body"],
-      },
+      name: "get_user_email",
+      description: "Get the email address of a user",
+      schema: z.object({
+        user_id: z.string(),
+      }),
     }
   );
 
   const sendEmailTool = tool(
-    async (input: unknown) => {
-      const { recipient, subject, body } = input as {
-        recipient: string;
-        subject: string;
-        body: string;
-      };
+    async (input) => {
       // In a real implementation, this would send the email
       // For now, we just return a success message
       return {
         success: true,
-        message: `Email sent successfully to ${recipient}`,
-        email: {
-          recipient,
-          subject,
-          body,
-        },
+        message: `Email sent successfully to ${input.recipient}`,
+        email: input,
       };
     },
     {
       name: "send_email",
       description: "Send an email to someone. This requires human approval before executing.",
-      schema: {
-        type: "object",
-        properties: {
-          recipient: {
-            type: "string",
-            description: "The email address of the recipient",
-          },
-          subject: {
-            type: "string",
-            description: "The subject line of the email",
-          },
-          body: {
-            type: "string",
-            description: "The body content of the email",
-          },
-        },
-        required: ["recipient", "subject", "body"],
-      },
+      schema: z.object({
+        recipient: z.string(),
+        subject: z.string(),
+        body: z.string(),
+      }),
     }
   );
 
@@ -136,7 +106,7 @@ export async function hitlAgent(options: {
   // Create agent with HITL middleware
   const agent = createAgent({
     model,
-    tools: [writeEmailTool, sendEmailTool],
+    tools: [getUserEmail, sendEmailTool],
     middleware: [
       humanInTheLoopMiddleware({
         interruptOn: {
