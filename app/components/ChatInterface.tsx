@@ -50,6 +50,17 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
 
+  // Reset state when scenario changes
+  useEffect(() => {
+    setMessages([]);
+    setToolCalls(new Map());
+    setInterruptData(null);
+    setCurrentThreadId(undefined);
+    setInputValue("");
+    accumulatedContentRef.current = "";
+    setIsLoading(false);
+  }, [selectedScenario]);
+
   // Auto-resize textarea and sync button height
   useEffect(() => {
     if (textareaRef.current) {
