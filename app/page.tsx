@@ -5,7 +5,7 @@ import Sidebar from "./components/Sidebar";
 import ChatInterface from "./components/ChatInterface";
 
 export default function Home() {
-  const [selectedScenario, setSelectedScenario] = useState<string | null>("simple-agent");
+  const [selectedScenario, setSelectedScenario] = useState<string | undefined>("simple-agent");
   const [apiKey, setApiKey] = useState<string>("");
 
   return (

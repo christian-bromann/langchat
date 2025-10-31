@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 
 import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
 
+import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
 import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ChunkUpdateData } from "@/app/types";
 
 interface ChatInterfaceProps {
-  selectedScenario: string | null;
+  selectedScenario?: string;
   apiKey: string;
 }
 
@@ -48,8 +48,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     }
   }, [inputValue]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || !selectedScenario || isLoading) {
+  const handleSend = async (messageOverride?: string) => {
+    const messageToSend = messageOverride || inputValue;
+
+    if (!messageToSend.trim() || !selectedScenario || isLoading) {
       return;
     }
 
@@ -61,10 +63,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       return;
     }
 
-    const userMessage = new HumanMessage(inputValue);
+    const userMessage = new HumanMessage(messageToSend);
 
     setMessages((prev) => [...prev, userMessage]);
-    const messageToSend = inputValue;
     setInputValue("");
     setIsLoading(true);
 
@@ -222,22 +223,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Image
-              src="/langchain.png"
-              alt="LangChain Logo"
-              width={120}
-              height={120}
-              className="mb-6"
-              priority
-            />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Welcome to LangChat
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 max-w-md">
-              Select an agent scenario from the sidebar to get started. This is a sandbox for
-              showcasing different use cases of LangChain&apos;s <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-900 rounded">createAgent</code>.
-            </p>
+          <div className="flex flex-col items-center justify-center h-full">
+            <WelcomeScreen selectedScenario={selectedScenario} apiKey={apiKey} handleSend={handleSend} />
           </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6">
@@ -290,7 +277,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
             </div>
             <button
               ref={buttonRef}
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={!inputValue.trim() || !selectedScenario || isLoading}
               className="px-6 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center shrink-0 cursor-pointer"
               style={{

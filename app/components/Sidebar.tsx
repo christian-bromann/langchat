@@ -16,7 +16,7 @@ const scenarios: AgentScenario[] = [
 ];
 
 interface SidebarProps {
-  selectedScenario: string | null;
+  selectedScenario?: string;
   onScenarioSelect: (scenarioId: string) => void;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
