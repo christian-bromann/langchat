@@ -5,7 +5,7 @@ import Sidebar from "./components/Sidebar";
 import ChatInterface from "./components/ChatInterface";
 
 export default function Home() {
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<string | null>("simple-agent");
 
   return (
     <div className="flex h-screen bg-white dark:bg-black">

@@ -17,8 +17,10 @@ interface ChatInterfaceProps {
 export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const accumulatedContentRef = useRef<string>("");
 
   // Auto-resize textarea and sync button height
   useEffect(() => {
@@ -36,29 +38,245 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
     }
   }, [inputValue]);
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
+  const handleSend = async () => {
+    if (!inputValue.trim() || !selectedScenario || isLoading) {
+      return;
+    }
 
-    const newMessage: Message = {
+    const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: inputValue,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages((prev) => [...prev, userMessage]);
+    const messageToSend = inputValue;
     setInputValue("");
+    setIsLoading(true);
 
-    // Placeholder for assistant response
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "This is a placeholder response. Agent functionality will be implemented soon.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    }, 500);
+    // Create assistant message placeholder
+    const assistantId = (Date.now() + 1).toString();
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+
+    try {
+      // Determine API endpoint - use basic for now
+      const apiEndpoint = "/api/basic";
+
+      // Send request to API
+      const response = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: messageToSend }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}: ${errorText}`);
+      }
+
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      let buffer = "";
+      let hasReceivedData = false;
+
+      // Reset refs for this stream
+      accumulatedContentRef.current = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        hasReceivedData = true;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let currentEventType = "update";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            try {
+              const data = JSON.parse(dataStr);
+
+              if (currentEventType === "error") {
+                const errorMessage = data.error || "Unknown error occurred";
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, content: `Error: ${errorMessage}` }
+                      : msg
+                  )
+                );
+                break;
+              }
+
+              // Handle different event formats
+              // Format 1: data: [{...}] - array of messages (incremental chunks)
+              // Format 2: data: {"messages": [...]} - object with messages array (final summary)
+              let messagesToProcess: unknown[] = [];
+
+              if (Array.isArray(data)) {
+                // Direct array format - these are incremental chunks
+                messagesToProcess = data;
+              } else if (data.messages && Array.isArray(data.messages)) {
+                // Object format with messages array
+                // Skip if this is the final summary message (has full content)
+                // Only process if it's incremental chunks
+                const firstMsg = data.messages[0];
+                if (firstMsg && firstMsg.kwargs && firstMsg.kwargs.content) {
+                  const content = firstMsg.kwargs.content;
+                  // If content is very long (likely final summary), skip it
+                  // We've already processed incremental chunks
+                  if (typeof content === "string" && content.length > 100) {
+                    continue;
+                  }
+                }
+                messagesToProcess = data.messages;
+              }
+
+              // Filter out user messages and only process AI messages
+              const aiMessages = messagesToProcess.filter((msg: unknown) => {
+                const m = msg as { id?: string[]; lc?: number; [key: string]: unknown };
+                return (
+                  m.lc === 1 &&
+                  m.id &&
+                  m.id[0] === "langchain_core" &&
+                  m.id[1] === "messages" &&
+                  (m.id[2] === "AIMessageChunk" || m.id[2] === "AIMessage")
+                );
+              });
+
+
+              if (aiMessages.length > 0) {
+                // Process each AI message chunk
+                for (const msg of aiMessages) {
+                  // Extract content from the message
+                  let newContent = "";
+
+                  if ((msg as { content?: unknown }).content !== undefined) {
+                    const msgContent = (msg as { content: unknown }).content;
+                    if (typeof msgContent === "string") {
+                      newContent = msgContent;
+                    } else if (Array.isArray(msgContent)) {
+                      newContent = msgContent
+                        .map((item: unknown) => {
+                          if (typeof item === "string") return item;
+                          if (item && typeof item === "object") {
+                            if ("text" in item && typeof (item as { text: unknown }).text === "string") {
+                              return String((item as { text: string }).text);
+                            }
+                            if ("content" in item) {
+                              return String((item as { content: unknown }).content);
+                            }
+                          }
+                          return "";
+                        })
+                        .join("");
+                    }
+                  } else if ((msg as { kwargs?: { content?: unknown } }).kwargs?.content) {
+                    const kwargsContent = (msg as { kwargs: { content: unknown } }).kwargs.content;
+                    if (typeof kwargsContent === "string") {
+                      newContent = kwargsContent;
+                    } else if (Array.isArray(kwargsContent)) {
+                      newContent = kwargsContent
+                        .map((item: unknown) => {
+                          if (typeof item === "string") return item;
+                          if (item && typeof item === "object" && "text" in item) {
+                            return String((item as { text: string }).text);
+                          }
+                          return "";
+                        })
+                        .join("");
+                    }
+                  }
+
+                  // Process incremental content chunks
+                  // Each chunk contains only the new content, not accumulated content
+                  if (newContent !== undefined && newContent !== null && newContent.length > 0) {
+                    // Append the incremental chunk to accumulated content
+                    accumulatedContentRef.current += newContent;
+                    // Immediately update UI with the accumulated content (real-time streaming)
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantId
+                          ? { ...msg, content: accumulatedContentRef.current }
+                          : msg
+                      )
+                    );
+                  }
+                }
+              }
+
+              if (currentEventType === "end") {
+                // Ensure all content is displayed when stream ends
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, content: accumulatedContentRef.current }
+                      : msg
+                  )
+                );
+                break;
+              }
+            } catch {
+              // Silently ignore JSON parse errors for incomplete data
+            }
+          }
+        }
+      }
+
+      // Ensure all content is displayed when stream ends
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId
+            ? { ...msg, content: accumulatedContentRef.current }
+            : msg
+        )
+      );
+
+      if (!hasReceivedData) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? { ...msg, content: "No response received from the agent." }
+              : msg
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId
+            ? {
+                ...msg,
+                content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
+              }
+            : msg
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -106,7 +324,12 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
                       : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <p className="whitespace-pre-wrap">
+                    {message.content}
+                    {message.role === "assistant" && isLoading && message.content === "" && (
+                      <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
+                    )}
+                  </p>
                 </div>
               </div>
             ))}
@@ -125,7 +348,7 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your message..."
+                placeholder={selectedScenario ? "Type your message..." : "Select a scenario first..."}
                 rows={1}
                 className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 resize-none overflow-hidden"
                 style={{
@@ -137,13 +360,13 @@ export default function ChatInterface({ selectedScenario }: ChatInterfaceProps) 
             <button
               ref={buttonRef}
               onClick={handleSend}
-              disabled={!inputValue.trim()}
-              className="px-6 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center shrink-0"
+              disabled={!inputValue.trim() || !selectedScenario || isLoading}
+              className="px-6 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center shrink-0 cursor-pointer"
               style={{
                 height: "52px",
               }}
             >
-              Send
+              {isLoading ? "Sending..." : "Send"}
             </button>
           </div>
         </div>

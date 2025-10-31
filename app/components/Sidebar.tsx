@@ -8,9 +8,10 @@ interface AgentScenario {
 }
 
 const scenarios: AgentScenario[] = [
-  { id: "human-in-the-loop", name: "Human In the Loop" },
-  { id: "summarization", name: "Summarization" },
-  { id: "model-call-limits", name: "Model Call Limits" },
+  { id: "simple-agent", name: "Simple Agent" },
+  // { id: "human-in-the-loop", name: "Human In the Loop" },
+  // { id: "summarization", name: "Summarization" },
+  // { id: "model-call-limits", name: "Model Call Limits" },
 ];
 
 interface SidebarProps {
@@ -30,7 +31,7 @@ export default function Sidebar({ selectedScenario, onScenarioSelect }: SidebarP
             <button
               key={scenario.id}
               onClick={() => onScenarioSelect(scenario.id)}
-              className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+              className={`w-full text-left px-4 py-3 rounded-lg transition-colors cursor-pointer ${
                 selectedScenario === scenario.id
                   ? "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-medium"
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900"
