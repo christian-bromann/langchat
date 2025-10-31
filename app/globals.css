@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,8 +14,21 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Force light mode when .light class is present */
+html.light {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+/* Force dark mode when .dark class is present */
+html.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+/* System preference fallback (only when no explicit class is set) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  html:not(.light):not(.dark) {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
