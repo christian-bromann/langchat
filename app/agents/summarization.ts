@@ -1,31 +1,8 @@
 import { z } from "zod";
 import { createAgent, HumanMessage, AIMessage, ToolMessage, tool, summarizationMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";
 
-/**
- * Summarization agent that demonstrates automatic conversation summarization
- * when approaching token limits. This agent starts with a longer conversation
- * history so that when the user sends another message, summarization kicks in.
- */
-// Shared checkpointer instance using Redis
-let checkpointer: RedisSaver | null = null;
-
-async function getCheckpointer() {
-  if (!checkpointer) {
-    const redisUrl = process.env.REDIS_URL;
-
-    if (!redisUrl) {
-      throw new Error("REDIS_URL is not set as an environment variable");
-    }
-
-    checkpointer = await RedisSaver.fromUrl(redisUrl, {
-      defaultTTL: 60, // TTL in minutes
-      refreshOnRead: true,
-    });
-  }
-  return checkpointer;
-}
+import { getCheckpointer } from "@/app/utils";
 
 // Mock file system for the coding agent
 const mockFileSystem: Record<string, string> = {
@@ -306,7 +283,7 @@ export async function summarizationAgent(options: {
   });
 
   // Get checkpointer instance
-  const checkpointerInstance = await getCheckpointer();
+  const checkpointer = await getCheckpointer();
 
   // Create agent with SummarizationMiddleware
   const agent = createAgent({
@@ -320,7 +297,7 @@ export async function summarizationAgent(options: {
         summaryPrefix: "## Previous conversation summary:",
       }),
     ],
-    checkpointer: checkpointerInstance,
+    checkpointer,
     systemPrompt: "You are a helpful coding assistant that helps developers refactor and improve their TypeScript/JavaScript projects. You can read files and explore project structures to understand codebases. Provide thoughtful, detailed code reviews and refactoring suggestions.",
   });
 
@@ -336,7 +313,7 @@ export async function summarizationAgent(options: {
   } else {
     // Check if thread exists by trying to get checkpoint state
     try {
-      const checkpoint = await checkpointerInstance.get(config);
+      const checkpoint = await checkpointer.get(config);
       // If checkpoint is null or undefined, it's a new thread
       isNewThread = !checkpoint;
     } catch {

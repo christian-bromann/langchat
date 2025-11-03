@@ -2,13 +2,8 @@ import { z } from "zod";
 import { createAgent, HumanMessage, tool, humanInTheLoopMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { Command } from "@langchain/langgraph";
-import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";
 
-/**
- * Human-in-the-Loop agent with email tools that require approval
- */
-// Shared checkpointer instance using Redis
-let checkpointer: RedisSaver | null = null;
+import { getCheckpointer } from "@/app/utils";
 
 const ADDRESS_BOOK = {
   "1234567890": {
@@ -27,22 +22,6 @@ const ADDRESS_BOOK = {
     phone: "+1 234-567-8902",
   },
 };
-
-async function getCheckpointer() {
-  if (!checkpointer) {
-    const redisUrl = process.env.REDIS_URL;
-
-    if (!redisUrl) {
-      throw new Error("REDIS_URL is not set as an environment variable");
-    }
-
-    checkpointer = await RedisSaver.fromUrl(redisUrl, {
-      defaultTTL: 60, // TTL in minutes
-      refreshOnRead: true,
-    });
-  }
-  return checkpointer;
-}
 
 export async function hitlAgent(options: {
   message: string;

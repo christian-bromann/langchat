@@ -138,6 +138,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         apiEndpoint = "/api/summarization";
       } else if (selectedScenario === "model-call-limits") {
         apiEndpoint = "/api/model-call-limits";
+      } else if (selectedScenario === "tool-call-limits") {
+        apiEndpoint = "/api/tool-call-limits";
       }
 
       // Generate or use existing thread ID

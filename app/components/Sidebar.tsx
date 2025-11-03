@@ -13,6 +13,7 @@ const scenarios: AgentScenario[] = [
   { id: "human-in-the-loop", name: "Human In the Loop" },
   { id: "summarization", name: "Summarization" },
   { id: "model-call-limits", name: "Model Call Limits" },
+  { id: "tool-call-limits", name: "Tool Call Limits" },
 ];
 
 interface SidebarProps {

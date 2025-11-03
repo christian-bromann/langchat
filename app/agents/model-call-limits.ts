@@ -2,6 +2,8 @@ import { z } from "zod";
 import { createAgent, HumanMessage, tool, modelCallLimitMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 
+import { getCheckpointer } from "@/app/utils";
+
 /**
  * Model Call Limit agent - demonstrates limiting model calls
  * This agent has multiple tools that encourage many tool calls
@@ -140,6 +142,9 @@ export async function modelCallLimitsAgent(options: {
     }
   );
 
+  // Get checkpointer instance
+  const checkpointer = await getCheckpointer();
+
   // Create agent with ModelCallLimitMiddleware
   const agent = createAgent({
     model,
@@ -151,6 +156,7 @@ export async function modelCallLimitsAgent(options: {
         exitBehavior,
       }),
     ],
+    checkpointer,
     systemPrompt: `You are a helpful assistant that can perform various operations on data.
 You have access to tools that allow you to:
 - Get individual items by ID

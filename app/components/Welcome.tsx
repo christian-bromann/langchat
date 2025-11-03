@@ -5,6 +5,7 @@ const SCENARIO_PROMPTS = {
   "human-in-the-loop": "Send an email to the user with ID 1234567890 asking them about their recent order",
   "summarization": "Let's continue with the refactoring. Can you help me create the dateUtils.ts file?",
   "model-call-limits": "Get all items from ID 1 to 5, check which ones have prime-numbered IDs, calculate the sum of their values, and tell me which category has the most items.",
+  "tool-call-limits": "Search for information about TypeScript and Python, then get all users with role 'user' and calculate the sum of their IDs.",
 } as const;
 
 interface WelcomeScreenProps {
