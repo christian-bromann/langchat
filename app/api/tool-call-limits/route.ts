@@ -6,14 +6,15 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { 
-      message, 
-      apiKey, 
-      globalThreadLimit, 
-      globalRunLimit, 
-      searchThreadLimit, 
+    const {
+      message,
+      apiKey,
+      globalThreadLimit,
+      globalRunLimit,
+      searchThreadLimit,
       searchRunLimit,
-      exitBehavior 
+      exitBehavior,
+      threadId
     } = body;
 
     if (!message) {
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       searchThreadLimit,
       searchRunLimit,
       exitBehavior,
+      threadId,
     });
 
     return streamResponse(agentStream);

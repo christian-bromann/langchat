@@ -24,6 +24,7 @@ export async function modelCallLimitsAgent(options: {
   runLimit?: number;
   exitBehavior?: "throw" | "end";
   model?: string;
+  threadId?: string;
 }) {
   const modelName = options.model ?? "claude-3-7-sonnet-latest";
   const threadLimit = options.threadLimit ?? 30;
@@ -174,9 +175,11 @@ Be thorough and complete all the requested operations.`,
     messages: [new HumanMessage(options.message)],
   };
 
+  const threadId = options.threadId || `thread-${Date.now()}`;
   return agent.stream(initialState, {
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50, // High recursion limit to allow many calls before hitting the middleware limit
+    configurable: { thread_id: threadId },
   });
 }
 

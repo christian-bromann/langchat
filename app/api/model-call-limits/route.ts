@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { message, apiKey, threadLimit, runLimit, exitBehavior } = body;
+    const { message, apiKey, threadLimit, runLimit, exitBehavior, threadId } = body;
 
     if (!message) {
       return new Response(
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       threadLimit,
       runLimit,
       exitBehavior,
+      threadId,
     });
 
     return streamResponse(agentStream);

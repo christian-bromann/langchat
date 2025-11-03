@@ -10,6 +10,7 @@ import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessa
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
+import { useStatistics } from "@/app/contexts/StatisticsContext";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
@@ -52,6 +53,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
   const messageCountRef = useRef<number>(0);
+  const processedTokenMessagesRef = useRef<Set<string>>(new Set());
+  const processedToolCallIdsRef = useRef<Set<string>>(new Set());
+  const { recordToolCall, recordModelCall, recordTokens, resetStatistics } = useStatistics();
 
   // Reset state when scenario changes
   useEffect(() => {
@@ -63,7 +67,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setSummarizations([]);
     messageCountRef.current = 0;
     accumulatedContentRef.current = "";
-  }, [selectedScenario]);
+    processedTokenMessagesRef.current = new Set();
+    processedToolCallIdsRef.current = new Set();
+    resetStatistics();
+  }, [selectedScenario, resetStatistics]);
 
   // Auto-resize textarea and sync button height
   useEffect(() => {
@@ -329,6 +336,42 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         },
         model_request: (data: ModelRequestEventData) => {
           updateToolCallArgs(data);
+          recordModelCall();
+
+          // Track token usage and tool calls from model_request events (these contain final, accurate counts)
+          const messages = data.model_request?.messages || [];
+
+          for (const message of messages) {
+            // Track tokens
+            if (message.kwargs?.usage_metadata) {
+              const usage = message.kwargs.usage_metadata;
+              const input = usage.input_tokens || 0;
+              const output = usage.output_tokens || 0;
+              const total = usage.total_tokens || input + output;
+
+              // Only track if we have valid token counts (input_tokens > 0 indicates final count)
+              if (input > 0 && total > 0) {
+                const messageId = message.kwargs?.id as string | undefined;
+                if (messageId && !processedTokenMessagesRef.current.has(messageId)) {
+                  recordTokens(input, output, total);
+                  processedTokenMessagesRef.current.add(messageId);
+                }
+              }
+            }
+
+            // Track tool calls (only once per unique tool call ID across the conversation)
+            if (message.kwargs?.tool_calls && Array.isArray(message.kwargs.tool_calls)) {
+              for (const toolCall of message.kwargs.tool_calls) {
+                if (toolCall && typeof toolCall === "object" && "id" in toolCall && "name" in toolCall) {
+                  const toolCallId = toolCall.id as string;
+                  if (!processedToolCallIdsRef.current.has(toolCallId)) {
+                    recordToolCall(toolCall.name as string);
+                    processedToolCallIdsRef.current.add(toolCallId);
+                  }
+                }
+              }
+            }
+          }
         },
         interrupt: (data: InterruptEventData) => {
           // Handle interrupt event - show bubble for user approval
