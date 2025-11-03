@@ -104,25 +104,11 @@ export async function hitlAgent(options: {
   // Get or create thread ID
   const threadId = options.threadId || `thread-${Date.now()}`;
   const config = { configurable: { thread_id: threadId } };
-
-  // If this is a response to an interrupt, use Command to resume
-  if (options.interruptResponse) {
-    // Resume from interrupt using Command
-    return agent.stream(
-      new Command({
-        resume: {
-          decisions: options.interruptResponse.decisions,
-        },
-      }),
-      {
-        ...config,
-        streamMode: ["values", "updates", "messages"],
-      }
-    );
-  }
-
-  // Initialize the conversation
-  const initialState = {
+  const initialState = options.interruptResponse ? new Command({
+    resume: {
+      decisions: options.interruptResponse.decisions,
+    },
+  }) : {
     messages: [new HumanMessage(options.message)],
   };
 
