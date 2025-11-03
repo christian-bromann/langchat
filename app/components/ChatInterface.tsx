@@ -63,7 +63,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setSummarizations([]);
     messageCountRef.current = 0;
     accumulatedContentRef.current = "";
-    setIsLoading(false);
   }, [selectedScenario]);
 
   // Auto-resize textarea and sync button height
@@ -333,10 +332,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           // Handle interrupt event - show bubble for user approval
           if (data && Array.isArray(data.action_requests) && data.action_requests.length > 0) {
             setInterruptData(data);
-            setIsLoading(false); // Pause loading while waiting for user decision
           }
         },
         end: () => {
+          setIsLoading(false);
           // Ensure all content is displayed when stream ends
           setMessages((prev) =>
             prev.map((msg) => {
@@ -347,9 +346,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
               return msg;
             })
           );
-          setIsLoading(false);
         },
         error: (error: Error) => {
+          setIsLoading(false);
           const errorMessage = error.message || "Unknown error occurred";
           setMessages((prev) =>
             prev.map((msg) =>
@@ -358,7 +357,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                 : msg
             )
           );
-          setIsLoading(false);
         },
       });
 
@@ -384,12 +382,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
             : msg
         )
       );
-    } finally {
-      // Don't set loading to false here if we're showing interrupt bubble
-      // It will be set to false when user responds
-      if (!interruptData) {
-        // setIsLoading(false);
-      }
     }
   };
 
@@ -403,7 +395,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     };
 
     setInterruptData(null);
-    setIsLoading(true);
     await handleSend("", interruptResponse);
   };
 
@@ -418,7 +409,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     };
 
     setInterruptData(null);
-    setIsLoading(true);
     await handleSend("", interruptResponse);
   };
 
@@ -437,7 +427,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     };
 
     setInterruptData(null);
-    setIsLoading(true);
     await handleSend("", interruptResponse);
   };
 
@@ -496,7 +485,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                       .sort((a, b) => a.timestamp - b.timestamp)
                   : [];
 
-                console.log("!!!!", isLoading)
                 return (
                   <div key={message.id || messageIndex}>
                     {/* Message */}
@@ -514,7 +502,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                       >
                         <p className="whitespace-pre-wrap">
                           {message.content as string}
-                          {isLoading && (
+                          {messageIndex === messages.length - 1 && isLoading && (
                             <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
                           )}
                         </p>
@@ -536,6 +524,13 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                 onReject={handleInterruptReject}
                 onEdit={handleInterruptEdit}
               />
+            )}
+            {!interruptData && isLoading && (
+              <div className="flex justify-center items-center gap-1.5 py-2">
+                <span className="inline-block w-2 h-2 bg-gray-400 dark:bg-gray-600 rounded-full animate-dot-wave" style={{ animationDelay: '0ms' }} />
+                <span className="inline-block w-2 h-2 bg-gray-400 dark:bg-gray-600 rounded-full animate-dot-wave" style={{ animationDelay: '200ms' }} />
+                <span className="inline-block w-2 h-2 bg-gray-400 dark:bg-gray-600 rounded-full animate-dot-wave" style={{ animationDelay: '400ms' }} />
+              </div>
             )}
           </div>
         )}
