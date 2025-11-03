@@ -9,6 +9,7 @@ import { EVENT_TYPES } from "@/app/constants";
 import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
+import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
@@ -46,9 +47,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const [toolCalls, setToolCalls] = useState<Map<string, ToolCallState>>(new Map());
   const [interruptData, setInterruptData] = useState<InterruptEventData | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(undefined);
+  const [summarizations, setSummarizations] = useState<SummarizationEvent[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
+  const messageCountRef = useRef<number>(0);
 
   // Reset state when scenario changes
   useEffect(() => {
@@ -57,6 +60,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setInterruptData(null);
     setCurrentThreadId(undefined);
     setInputValue("");
+    setSummarizations([]);
+    messageCountRef.current = 0;
     accumulatedContentRef.current = "";
     setIsLoading(false);
   }, [selectedScenario]);
@@ -113,7 +118,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     // Only add user message if not resuming from interrupt
     if (!interruptResponse && messageToSend.trim()) {
       const userMessage = new HumanMessage(messageToSend);
-      setMessages((prev) => [...prev, userMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev, userMessage];
+        messageCountRef.current = newMessages.length;
+        return newMessages;
+      });
       setInputValue("");
     }
 
@@ -125,9 +134,12 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
     try {
       // Determine API endpoint based on selected scenario
-      const apiEndpoint = selectedScenario === "human-in-the-loop"
-        ? "/api/hitl"
-        : "/api/basic";
+      let apiEndpoint = "/api/basic";
+      if (selectedScenario === "human-in-the-loop") {
+        apiEndpoint = "/api/hitl";
+      } else if (selectedScenario === "summarization") {
+        apiEndpoint = "/api/summarization";
+      }
 
       // Generate or use existing thread ID
       const threadId = currentThreadId || `thread-${Date.now()}`;
@@ -192,6 +204,16 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
       // Helper function to process update events (streaming AIMessageChunk data or ToolMessage data)
       const processUpdate = (data: UpdateData) => {
+        /**
+         * Parse the summarization event from the update data
+         */
+        parseSummarizationEvent(data, messageCountRef.current, (summary) => {
+          setSummarizations((prev) => [
+            ...prev,
+            summary,
+          ]);
+        });
+
         // Check if this is an array update (either [AIMessageChunk, LangGraphMetadata] or [ToolMessage, LangGraphMetadata])
         if (!Array.isArray(data) || data.length !== 2) {
           return;
@@ -221,10 +243,12 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           setMessages((prev) => {
             const exists = prev.some(m => m.id === msgId);
             if (!exists) {
-              return [...prev, new AIMessage({
+              const newMessages = [...prev, new AIMessage({
                 id: msgId,
                 content: "",
               })];
+              messageCountRef.current = newMessages.length;
+              return newMessages;
             }
             return prev;
           });
@@ -433,44 +457,75 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6">
-            {messages.map((message, messageIndex) => {
-              // Get tool calls associated with this AI message
-              const associatedToolCalls = AIMessage.isInstance(message) && message.id
-                ? Array.from(toolCalls.values())
-                    .filter((tc) => tc.aiMessageId === message.id)
-                    .sort((a, b) => a.timestamp - b.timestamp)
-                : [];
+            {/* Render messages and summarizations interleaved */}
+            {(() => {
+              // Create a combined array of messages and summarizations
+              const items: Array<{ type: 'message' | 'summarization'; data: BaseMessage | SummarizationEvent; index: number }> = [];
 
-              return (
-                <div key={message.id || messageIndex}>
-                  {/* Message */}
-                  <div
-                    className={`flex ${
-                      HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
-                    }`}
-                  >
+              // Add all messages
+              messages.forEach((msg, index) => {
+                items.push({ type: 'message', data: msg, index });
+              });
+
+              // Add summarizations at their correct positions
+              summarizations.forEach((summ) => {
+                // Insert summarization after the specified message index
+                items.push({
+                  type: 'summarization',
+                  data: summ,
+                  index: summ.afterMessageIndex + 0.5 // Use 0.5 to place between messages
+                });
+              });
+
+              // Sort by index (messages have integer indices, summarizations have index + 0.5)
+              items.sort((a, b) => a.index - b.index);
+
+              return items.map((item) => {
+                if (item.type === 'summarization') {
+                  return <SummarizationBubble key={item.data.id} summary={item.data as SummarizationEvent} />;
+                }
+
+                const message = item.data as BaseMessage;
+                const messageIndex = Math.floor(item.index);
+
+                // Get tool calls associated with this AI message
+                const associatedToolCalls = AIMessage.isInstance(message) && message.id
+                  ? Array.from(toolCalls.values())
+                      .filter((tc) => tc.aiMessageId === message.id)
+                      .sort((a, b) => a.timestamp - b.timestamp)
+                  : [];
+
+                return (
+                  <div key={message.id || messageIndex}>
+                    {/* Message */}
                     <div
-                      className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                        HumanMessage.isInstance(message)
-                          ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                          : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      className={`flex ${
+                        HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">
-                        {message.content as string}
-                        {AIMessage.isInstance(message) && isLoading && message.content === "" && (
-                          <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
-                        )}
-                      </p>
+                      <div
+                        className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                          HumanMessage.isInstance(message)
+                            ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+                            : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap">
+                          {message.content as string}
+                          {AIMessage.isInstance(message) && isLoading && message.content === "" && (
+                            <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
+                          )}
+                        </p>
+                      </div>
                     </div>
+                    {/* Tool calls associated with this message */}
+                    {associatedToolCalls.map((toolCallState) => (
+                      <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
+                    ))}
                   </div>
-                  {/* Tool calls associated with this message */}
-                  {associatedToolCalls.map((toolCallState) => (
-                    <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
-                  ))}
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
             {/* Interrupt Bubble - shown below messages when interrupt occurs */}
             {interruptData && (
               <InterruptBubble

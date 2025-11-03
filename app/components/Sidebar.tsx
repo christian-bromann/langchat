@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ThemeSwitcher from "./ThemeSwitcher";
 
 interface AgentScenario {
@@ -11,7 +11,7 @@ interface AgentScenario {
 const scenarios: AgentScenario[] = [
   { id: "simple-agent", name: "Simple Agent" },
   { id: "human-in-the-loop", name: "Human In the Loop" },
-  // { id: "summarization", name: "Summarization" },
+  { id: "summarization", name: "Summarization" },
   // { id: "model-call-limits", name: "Model Call Limits" },
 ];
 
@@ -24,6 +24,12 @@ interface SidebarProps {
 
 export default function Sidebar({ selectedScenario, onScenarioSelect, apiKey, onApiKeyChange }: SidebarProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY) {
+      onApiKeyChange(process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY);
+    }
+  }, [onApiKeyChange]);
 
   return (
     <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black h-screen flex flex-col">
@@ -92,7 +98,7 @@ export default function Sidebar({ selectedScenario, onScenarioSelect, apiKey, on
           <input
             id="api-key"
             type="password"
-            value={apiKey}
+            value={apiKey ?? process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY}
             onChange={(e) => onApiKeyChange(e.target.value)}
             placeholder="sk-ant-..."
             autoComplete="off"

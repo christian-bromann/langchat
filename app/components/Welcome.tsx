@@ -3,6 +3,7 @@ import Image from "next/image";
 const SCENARIO_PROMPTS = {
   "simple-agent": "Who is the customer with the ID 1234567890?",
   "human-in-the-loop": "Send an email to the user with ID 1234567890 asking them about their recent order",
+  "summarization": "Let's continue with the refactoring. Can you help me create the dateUtils.ts file?",
 } as const;
 
 interface WelcomeScreenProps {
