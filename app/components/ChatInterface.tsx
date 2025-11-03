@@ -126,8 +126,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       setInputValue("");
     }
 
-    setIsLoading(true);
-
     // Track current AI message ID - will be updated when we detect a new message
     let currentAssistantId = (Date.now() + 1).toString();
     const accumulatedContentByMessageRef = new Map<string, string>();
@@ -139,6 +137,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         apiEndpoint = "/api/hitl";
       } else if (selectedScenario === "summarization") {
         apiEndpoint = "/api/summarization";
+      } else if (selectedScenario === "model-call-limits") {
+        apiEndpoint = "/api/model-call-limits";
       }
 
       // Generate or use existing thread ID
@@ -314,6 +314,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         }
       };
 
+      setIsLoading(true);
       readStream(response, {
         update: (data: UpdateData) => {
           // Process update events which contain streaming AIMessageChunk data
@@ -387,7 +388,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       // Don't set loading to false here if we're showing interrupt bubble
       // It will be set to false when user responds
       if (!interruptData) {
-        setIsLoading(false);
+        // setIsLoading(false);
       }
     }
   };
@@ -495,10 +496,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                       .sort((a, b) => a.timestamp - b.timestamp)
                   : [];
 
+                console.log("!!!!", isLoading)
                 return (
                   <div key={message.id || messageIndex}>
                     {/* Message */}
-                    <div
+                    {message.content !== "" && <div
                       className={`flex ${
                         HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
                       }`}
@@ -512,12 +514,12 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                       >
                         <p className="whitespace-pre-wrap">
                           {message.content as string}
-                          {AIMessage.isInstance(message) && isLoading && message.content === "" && (
+                          {isLoading && (
                             <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
                           )}
                         </p>
                       </div>
-                    </div>
+                    </div>}
                     {/* Tool calls associated with this message */}
                     {associatedToolCalls.map((toolCallState) => (
                       <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
