@@ -11,6 +11,7 @@
   "bugs": {
     "url": "https://github.com/christian-bromann/langchat/issues"
   },
+  "type": "module",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -23,12 +24,13 @@
     "@langchain/anthropic": "^0.3.33",
     "@langchain/core": "^1.0.2",
     "@langchain/langgraph": "^1.0.1",
-    "@langchain/langgraph-checkpoint-redis": "^1.0.0",
-    "langchain": "^1.0.2",
+    "@langchain/langgraph-checkpoint-redis": "file:/Users/christian.bromann/Sites/LangChain/langgraphjs/libs/checkpoint-redis",
+    "langchain": "file:/Users/christian.bromann/Sites/LangChain/langchainjs/libs/langchain",
     "next": "16.0.1",
     "next-themes": "^0.4.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "tsx": "^4.20.6",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -40,6 +42,9 @@
     "eslint-config-next": "16.0.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "langchain": "file:/Users/christian.bromann/Sites/LangChain/langchainjs/libs/langchain"
   },
   "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748"
 }
