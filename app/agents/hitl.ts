@@ -1,10 +1,8 @@
 import { z } from "zod";
-import { createAgent, HumanMessage, tool, humanInTheLoopMiddleware } from "langchain";
+import { createAgent, HumanMessage, tool } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { Command } from "@langchain/langgraph";
 import type { HITLResponse } from "langchain";
-
-import { checkpointer } from "@/app/utils";
 
 const USERS = {
   "sarahchen": {
@@ -78,39 +76,10 @@ export async function hitlAgent(options: {
   const agent = createAgent({
     model,
     tools: [getUserEmail, sendEmailTool],
-    middleware: [
-      humanInTheLoopMiddleware({
-        interruptOn: {
-          // Require approval for sending emails
-          send_email: (toolCall) => {
-            const user = Object.values(USERS).find(
-              (contact) => contact.email === toolCall.args.recipient);
-
-            /**
-             * Premium customers require human review before sending
-             */
-            if (!user || user.type === "premium_customer") {
-              return {
-                allowedDecisions: ["approve", "edit", "reject"],
-              }
-            }
-
-            /**
-             * Regular customers can be auto-approved
-             */
-            return false;
-          },
-          // Auto-approve writing emails (drafting)
-          write_email: false,
-        },
-      }),
-    ],
-    checkpointer,
   });
 
   // Get or create thread ID
-  const threadId = options.threadId || `thread-${Date.now()}`;
-  const config = { configurable: { thread_id: threadId } };
+  const config = { configurable: { thread_id: options.threadId } };
   const initialState = options.interruptResponse ? new Command({
     resume: {
       decisions: options.interruptResponse.decisions,
