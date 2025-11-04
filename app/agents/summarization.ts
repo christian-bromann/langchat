@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAgent, HumanMessage, AIMessage, ToolMessage, tool, summarizationMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 
-import { getCheckpointer } from "@/app/utils";
+import { checkpointer } from "@/app/utils";
 
 // Mock file system for the coding agent
 const mockFileSystem: Record<string, string> = {
@@ -281,9 +281,6 @@ export async function summarizationAgent(options: {
     model: summaryModelName,
     apiKey: options.apiKey,
   });
-
-  // Get checkpointer instance
-  const checkpointer = await getCheckpointer();
 
   // Create agent with SummarizationMiddleware
   const agent = createAgent({

@@ -3,7 +3,7 @@ import { createAgent, HumanMessage, tool, humanInTheLoopMiddleware } from "langc
 import { ChatAnthropic } from "@langchain/anthropic";
 import { Command } from "@langchain/langgraph";
 
-import { getCheckpointer } from "@/app/utils";
+import { checkpointer } from "@/app/utils";
 
 const ADDRESS_BOOK = {
   "1234567890": {
@@ -79,9 +79,6 @@ export async function hitlAgent(options: {
     }
   );
 
-  // Get checkpointer instance
-  const checkpointerInstance = await getCheckpointer();
-
   // Create agent with HITL middleware
   const agent = createAgent({
     model,
@@ -98,7 +95,7 @@ export async function hitlAgent(options: {
         },
       }),
     ],
-    checkpointer: checkpointerInstance,
+    checkpointer,
   });
 
   // Get or create thread ID

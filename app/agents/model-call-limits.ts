@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAgent, HumanMessage, tool, modelCallLimitMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 
-import { getCheckpointer } from "@/app/utils";
+import { checkpointer } from "@/app/utils";
 
 /**
  * Model Call Limit agent - demonstrates limiting model calls
@@ -142,9 +142,6 @@ export async function modelCallLimitsAgent(options: {
       }),
     }
   );
-
-  // Get checkpointer instance
-  const checkpointer = await getCheckpointer();
 
   // Create agent with ModelCallLimitMiddleware
   const agent = createAgent({

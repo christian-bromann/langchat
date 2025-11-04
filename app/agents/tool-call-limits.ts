@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAgent, HumanMessage, tool, toolCallLimitMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 
-import { getCheckpointer } from "@/app/utils";
+import { checkpointer } from "@/app/utils";
 
 /**
  * Tool Call Limit agent - demonstrates limiting tool calls
@@ -165,9 +165,6 @@ export async function toolCallLimitsAgent(options: {
     runLimit: searchRunLimit,
     exitBehavior,
   });
-
-  // Get checkpointer instance
-  const checkpointer = await getCheckpointer();
 
   // Create agent with both limiters
   const agent = createAgent({
