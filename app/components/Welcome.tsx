@@ -6,7 +6,6 @@ const SCENARIO_PROMPTS = {
   ],
   "human-in-the-loop": [
     "Send an email to the user \"sarahchen\" asking them about their recent order.",
-    "Send an email to the user \"emilyj\" asking them about their recent order.",
   ],
   "summarization": [
     "Let's continue with the refactoring. Can you help me create the dateUtils.ts file?"
