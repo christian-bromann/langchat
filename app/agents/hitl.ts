@@ -1,8 +1,10 @@
 import { z } from "zod";
-import { createAgent, HumanMessage, tool } from "langchain";
+import { createAgent, HumanMessage, tool, humanInTheLoopMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { Command } from "@langchain/langgraph";
 import type { HITLResponse } from "langchain";
+
+import { checkpointer } from "@/app/utils";
 
 const USERS = {
   "sarahchen": {
@@ -76,6 +78,12 @@ export async function hitlAgent(options: {
   const agent = createAgent({
     model,
     tools: [getUserEmail, sendEmailTool],
+    middleware: [humanInTheLoopMiddleware({
+      interruptOn: {
+        send_email: true
+      }
+    })],
+    checkpointer: checkpointer,
   });
 
   // Get or create thread ID
