@@ -6,24 +6,21 @@ import type { HITLResponse } from "langchain";
 
 import { checkpointer } from "@/app/utils";
 
-const CONTACTS = {
-  "1234567890": {
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+1 234-567-8900",
-    type: "friend"
+const USERS = {
+  "sarahchen": {
+    name: "Sarah Chen",
+    email: "sarah.chen@acme.com",
+    type: "customer"
   },
-  "1234567891": {
-    name: "Jane Doe",
-    email: "jane.doe@example.com",
-    phone: "+1 234-567-8901",
-    type: "professional"
+  "mrodriguez": {
+    name: "Michael Rodriguez",
+    email: "m.rodriguez@techcorp.io",
+    type: "customer"
   },
-  "1234567892": {
-    name: "Jim Doe",
-    email: "jim.doe@example.com",
-    phone: "+1 234-567-8902",
-    type: "professional"
+  "emilyj": {
+    name: "Emily Johnson",
+    email: "emily.j@partners.com",
+    type: "premium_customer"
   },
 };
 
@@ -45,13 +42,13 @@ export async function hitlAgent(options: {
   // Create email tools
   const getUserEmail = tool(
     async (input) => {
-      return CONTACTS[input.user_id as keyof typeof CONTACTS];
+      return USERS[input.username as keyof typeof USERS];
     },
     {
       name: "get_user_email",
       description: "Get the email address of a user",
       schema: z.object({
-        user_id: z.string(),
+        username: z.string(),
       }),
     }
   );
@@ -86,20 +83,20 @@ export async function hitlAgent(options: {
         interruptOn: {
           // Require approval for sending emails
           send_email: (toolCall) => {
-            const user = Object.values(CONTACTS).find(
+            const user = Object.values(USERS).find(
               (contact) => contact.email === toolCall.args.recipient);
 
             /**
-             * If the user is not found or is a professional, we need to review
+             * Premium customers require human review before sending
              */
-            if (!user || user.type === "professional") {
+            if (!user || user.type === "premium_customer") {
               return {
                 allowedDecisions: ["approve", "edit", "reject"],
               }
             }
 
             /**
-             * If the user is a friend, we don't need to approve the email
+             * Regular customers can be auto-approved
              */
             return false;
           },
