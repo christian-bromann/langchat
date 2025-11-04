@@ -5,21 +5,24 @@ import { Command } from "@langchain/langgraph";
 
 import { checkpointer } from "@/app/utils";
 
-const ADDRESS_BOOK = {
+const CONTACTS = {
   "1234567890": {
     name: "John Doe",
     email: "john.doe@example.com",
     phone: "+1 234-567-8900",
+    type: "friend"
   },
   "1234567891": {
     name: "Jane Doe",
     email: "jane.doe@example.com",
     phone: "+1 234-567-8901",
+    type: "professional"
   },
   "1234567892": {
     name: "Jim Doe",
     email: "jim.doe@example.com",
     phone: "+1 234-567-8902",
+    type: "professional"
   },
 };
 
@@ -47,7 +50,7 @@ export async function hitlAgent(options: {
   // Create email tools
   const getUserEmail = tool(
     async (input) => {
-      return ADDRESS_BOOK[input.user_id as keyof typeof ADDRESS_BOOK];
+      return CONTACTS[input.user_id as keyof typeof CONTACTS];
     },
     {
       name: "get_user_email",
@@ -87,8 +90,23 @@ export async function hitlAgent(options: {
       humanInTheLoopMiddleware({
         interruptOn: {
           // Require approval for sending emails
-          send_email: {
-            allowedDecisions: ["approve", "edit", "reject"],
+          send_email: (toolCall) => {
+            const user = Object.values(CONTACTS).find(
+              (contact) => contact.email === toolCall.args.recipient);
+
+            /**
+             * If the user is not found or is a professional, we need to review
+             */
+            if (!user || user.type === "professional") {
+              return {
+                allowedDecisions: ["approve", "edit", "reject"],
+              }
+            }
+
+            /**
+             * If the user is a friend, we don't need to approve the email
+             */
+            return false;
           },
           // Auto-approve writing emails (drafting)
           write_email: false,
