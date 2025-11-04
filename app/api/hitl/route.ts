@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import type { HITLResponse } from "langchain";
+
 import { hitlAgent } from "@/app/agents/hitl";
 import { streamResponse } from "../utils";
 
@@ -23,46 +25,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the agent stream
-    // If interruptResponse is provided, we need to continue from the interrupt using Command
-    let interruptResponseObj = undefined;
-    if (interruptResponse) {
-      try {
-        const parsed = typeof interruptResponse === "string"
-          ? JSON.parse(interruptResponse)
-          : interruptResponse;
-
-        // Convert to the format expected by Command
-        // If it's a simple format, convert to decisions array
-        if (parsed.action) {
-          // Legacy format: { action: "approve", tool: "...", args: {...} }
-          const decisions = [{
-            type: parsed.action === "accept" ? "approve" : parsed.action,
-            ...(parsed.action === "edit" && parsed.args ? {
-              editedAction: {
-                name: parsed.tool || "send_email",
-                args: parsed.args,
-              },
-            } : {}),
-            ...(parsed.action === "reject" && parsed.message ? {
-              message: parsed.message,
-            } : {}),
-          }];
-          interruptResponseObj = { decisions };
-        } else if (parsed.decisions) {
-          // Already in the correct format
-          interruptResponseObj = { decisions: parsed.decisions };
-        }
-      } catch {
-        // If parsing fails, ignore
-      }
-    }
-
     const agentStream = await hitlAgent({
-      message: message || "", // Empty string if resuming from interrupt
+      message,
       apiKey,
       threadId,
-      interruptResponse: interruptResponseObj,
+      interruptResponse: parseInterruptResponse(interruptResponse),
     });
 
     return streamResponse(agentStream);
@@ -76,3 +43,45 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Parses the interrupt response into a format expected by Command
+ * @param interruptResponse - The interrupt response to parse
+ * @returns The parsed interrupt response
+ */
+function parseInterruptResponse(interruptResponse?: string): HITLResponse | undefined {
+  if (!interruptResponse) {
+    return undefined
+  };
+
+  let interruptResponseObj: HITLResponse | undefined;
+  try {
+    const parsed = typeof interruptResponse === "string"
+      ? JSON.parse(interruptResponse)
+      : interruptResponse;
+
+    // Convert to the format expected by Command
+    // If it's a simple format, convert to decisions array
+    if (parsed.action) {
+      const decisions = [{
+        type: parsed.action,
+        ...(parsed.action === "edit" && parsed.args ? {
+          editedAction: {
+            name: parsed.tool || "send_email",
+            args: parsed.args,
+          },
+        } : {}),
+        ...(parsed.action === "reject" && parsed.message ? {
+          message: parsed.message,
+        } : {}),
+      }];
+      interruptResponseObj = { decisions };
+    } else if (parsed.decisions) {
+      // Already in the correct format
+      interruptResponseObj = { decisions: parsed.decisions };
+    }
+
+    return interruptResponseObj;
+  } catch {
+    // If parsing fails, ignore
+  }
+}

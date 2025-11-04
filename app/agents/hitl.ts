@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAgent, HumanMessage, tool, humanInTheLoopMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { Command } from "@langchain/langgraph";
+import type { HITLResponse } from "langchain";
 
 import { checkpointer } from "@/app/utils";
 
@@ -30,13 +31,7 @@ export async function hitlAgent(options: {
   message: string;
   apiKey: string;
   threadId?: string;
-  interruptResponse?: {
-    decisions: Array<{
-      type: "approve" | "reject" | "edit";
-      editedAction?: { name: string; args: Record<string, unknown> };
-      message?: string;
-    }>;
-  };
+  interruptResponse?: HITLResponse;
   model?: string;
 }) {
   const modelName = options.model ?? "claude-3-7-sonnet-latest";
