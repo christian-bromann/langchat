@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { InterruptEventData } from "@/app/types";
+import type { HITLRequest } from "langchain";
 
 interface InterruptBubbleProps {
-  interruptData: InterruptEventData;
+  interruptData: HITLRequest;
   onApprove: () => void;
   onReject: (message?: string) => void;
   onEdit: (editedArgs: Record<string, unknown>) => void;
@@ -22,12 +22,12 @@ export function InterruptBubble({
   const [showRejectionInput, setShowRejectionInput] = useState(false);
 
   // Validate interrupt data
-  if (!interruptData || !Array.isArray(interruptData.action_requests) || interruptData.action_requests.length === 0) {
+  if (!interruptData || !Array.isArray(interruptData.actionRequests) || interruptData.actionRequests.length === 0) {
     return null;
   }
 
-  const actionRequest = interruptData.action_requests[0]; // Handle first action request
-  const reviewConfig = interruptData.review_configs?.find(
+  const actionRequest = interruptData.actionRequests[0]; // Handle first action request
+  const reviewConfig = interruptData.reviewConfigs?.find(
     (config) => config.actionName === actionRequest.name
   );
   const allowedDecisions = reviewConfig?.allowedDecisions || ["approve", "reject"];

@@ -131,17 +131,10 @@ export interface MessagesUpdateData {
   messages: (HumanMessage | AIMessageChunk | ToolMessageData)[];
 }
 
-// Private state structure
-export interface PrivateState {
-  threadLevelCallCount: number;
-  runModelCallCount: number;
-}
-
 // Model request update data structure
 export interface ModelRequestUpdateData {
   model_request: {
     messages: AIMessageChunk[];
-    _privateState: PrivateState;
   };
 }
 
@@ -155,7 +148,6 @@ export interface ToolsUpdateData {
 // Full update data structure (with private state)
 export interface FullUpdateData {
   messages: (HumanMessage | AIMessageChunk | ToolMessageData)[];
-  _privateState: PrivateState;
 }
 
 // Union type for all possible update data structures
@@ -169,25 +161,6 @@ export type UpdateData =
 // End event data structure
 export interface EndEventData {
   [key: string]: unknown;
-}
-
-// Action request in interrupt event
-export interface ActionRequest {
-  name: string;
-  args: Record<string, unknown>;
-  description: string;
-}
-
-// Review config in interrupt event
-export interface ReviewConfig {
-  actionName: string;
-  allowedDecisions: ("approve" | "edit" | "reject")[];
-}
-
-// Interrupt event data structure
-export interface InterruptEventData {
-  action_requests: ActionRequest[];
-  review_configs: ReviewConfig[];
 }
 
 // Agent event data structure

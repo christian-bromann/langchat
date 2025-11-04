@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { IterableReadableStream } from "@langchain/core/utils/stream";
+import type { HITLRequest } from "langchain";
+
 import type { EventType } from "@/app/types";
 
 interface LangChainMessage {
@@ -41,7 +43,7 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
 
             const [updateType, payload] = update;
             let eventType: EventType = "update";
-            let eventData = payload;
+            let eventData: HITLRequest | unknown = payload;
 
             // Check for interrupts (human-in-the-loop pauses)
             // Interrupts come in "values" updates with __interrupt__ field
@@ -53,11 +55,11 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
                 const interruptValue = payload[0];
                 if (interruptValue?.value?.actionRequests) {
                   eventData = {
-                    action_requests: interruptValue.value.actionRequests.map((ar: { name: string; args: Record<string, unknown> }) => ({
+                    actionRequests: interruptValue.value.actionRequests.map((ar: { name: string; args: Record<string, unknown> }) => ({
                       name: ar.name,
                       args: ar.args,
                     })),
-                    review_configs: interruptValue.value.reviewConfigs || [],
+                    reviewConfigs: interruptValue.value.reviewConfigs || [],
                   };
                 } else {
                   eventData = interruptValue;
@@ -71,23 +73,17 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
               // Check for interrupt marker in values
               if (values.__interrupt__) {
                 eventType = "interrupt";
-                const interruptArray = values.__interrupt__ as Array<{
-                  id?: string;
-                  value?: {
-                    actionRequests?: Array<{ name: string; args: Record<string, unknown>; description?: string }>;
-                    reviewConfigs?: Array<{ actionName: string; allowedDecisions?: string[] }>;
-                  };
-                }>;
+                const interruptArray = values.__interrupt__ as Array<{ value: HITLRequest }>;
 
                 // Extract action requests from interrupt
                 if (interruptArray && interruptArray.length > 0 && interruptArray[0]?.value?.actionRequests) {
                   eventData = {
-                    action_requests: interruptArray[0].value.actionRequests.map((ar) => ({
+                    actionRequests: interruptArray[0].value.actionRequests.map((ar) => ({
                       name: ar.name,
                       args: ar.args,
                       description: ar.description,
                     })),
-                    review_configs: interruptArray[0].value.reviewConfigs || [],
+                    reviewConfigs: interruptArray[0].value.reviewConfigs || [],
                   };
                 } else {
                   eventData = values.__interrupt__;
@@ -105,21 +101,18 @@ export function streamResponse (agentStream: IterableReadableStream<any>, custom
                 eventType = "interrupt";
                 const interruptArray = updates.__interrupt__ as Array<{
                   id?: string;
-                  value?: {
-                    actionRequests?: Array<{ name: string; args: Record<string, unknown>; description?: string }>;
-                    reviewConfigs?: Array<{ actionName: string; allowedDecisions?: string[] }>;
-                  };
+                  value?: HITLRequest;
                 }>;
 
                 // Extract action requests from interrupt
                 if (interruptArray && interruptArray.length > 0 && interruptArray[0]?.value?.actionRequests) {
                   eventData = {
-                    action_requests: interruptArray[0].value.actionRequests.map((ar) => ({
+                    actionRequests: interruptArray[0].value.actionRequests.map((ar) => ({
                       name: ar.name,
                       args: ar.args,
                       description: ar.description,
                     })),
-                    review_configs: interruptArray[0].value.reviewConfigs || [],
+                    reviewConfigs: interruptArray[0].value.reviewConfigs || [],
                   };
                 } else {
                   eventData = updates.__interrupt__;

@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
+import type { HITLRequest } from "langchain";
 import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
 
 import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
-import type { EventType, UpdateData, InterruptEventData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
+import type { EventType, UpdateData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
@@ -46,7 +47,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [toolCalls, setToolCalls] = useState<Map<string, ToolCallState>>(new Map());
-  const [interruptData, setInterruptData] = useState<InterruptEventData | null>(null);
+  const [interruptData, setInterruptData] = useState<HITLRequest | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(undefined);
   const [summarizations, setSummarizations] = useState<SummarizationEvent[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -373,9 +374,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
             }
           }
         },
-        interrupt: (data: InterruptEventData) => {
+        interrupt: (data: HITLRequest) => {
           // Handle interrupt event - show bubble for user approval
-          if (data && Array.isArray(data.action_requests) && data.action_requests.length > 0) {
+          if (data && Array.isArray(data.actionRequests) && data.actionRequests.length > 0) {
             setInterruptData(data);
           }
         },
@@ -460,7 +461,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const handleInterruptEdit = async (editedArgs: Record<string, unknown>) => {
     if (!interruptData) return;
 
-    const actionRequest = interruptData.action_requests[0];
+    const actionRequest = interruptData.actionRequests[0];
     const interruptResponse = {
       decisions: [{
         type: "edit" as const,
@@ -621,7 +622,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
 interface StreamEventCallbacks {
   update?: (data: UpdateData) => void;
-  interrupt?: (data: InterruptEventData) => void;
+  interrupt?: (data: HITLRequest) => void;
   agent?: (data: AgentEventData) => void;
   agent_state?: (data: AgentStateEventData) => void;
   model_request?: (data: ModelRequestEventData) => void;
@@ -692,7 +693,7 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
           } else if (currentEventType === "tools") {
             callbacks.tools?.(data as ToolsEventData);
           } else if (currentEventType === "interrupt") {
-            callbacks.interrupt?.(data as InterruptEventData);
+            callbacks.interrupt?.(data as HITLRequest);
           } else {
             if (!(currentEventType in callbacks)) {
               throw new Error(`Unknown event type: ${currentEventType}`);
