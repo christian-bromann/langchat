@@ -11,7 +11,7 @@ const SCENARIO_PROMPTS = {
     "Let's continue with the refactoring. Can you help me create the dateUtils.ts file?"
   ],
   "model-call-limits": [
-    "Get all items from ID 1 to 5, check which ones have prime-numbered IDs, calculate the sum of their values, and tell me which category has the most items."
+    "I'm alice@example.com. Can you check the shipping status for all my orders and also see what Electronics products are available?"
   ],
   "tool-call-limits": [
     "Hey, can you text my mom and let her know I'm on my way?"
