@@ -1,8 +1,21 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { z } from "zod";
 import { createAgent, HumanMessage, tool, toolCallLimitMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 
 import { checkpointer } from "@/app/utils";
+
+/**
+ * Get the number of credits the user has
+ * @param userId - The user ID to get the credits for
+ * @returns The number of credits the user has
+ */
+function getUserCredits(userId: string) {
+  /**
+   * mocked function to get the number of credits the user has
+   */
+  return 2;
+}
 
 /**
  * SMS Sending Agent - demonstrates tool call limits with credit-based resource management
@@ -27,20 +40,11 @@ const PHONE_BOOK: Record<string, string> = {
 export async function toolCallLimitsAgent(options: {
   message: string;
   apiKey: string;
-  smsThreadLimit?: number;
-  smsRunLimit?: number;
-  exitBehavior?: "end" | "error";
-  model?: string;
   threadId?: string;
 }) {
-  const modelName = options.model ?? "claude-3-7-sonnet-latest";
-  const smsThreadLimit = options.smsThreadLimit ?? 2;
-  const smsRunLimit = options.smsRunLimit ?? 2;
-  const exitBehavior = options.exitBehavior ?? "error";
-
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
-    model: modelName,
+    model: "claude-4-sonnet-latest",
     apiKey: options.apiKey,
   });
 
@@ -74,14 +78,15 @@ export async function toolCallLimitsAgent(options: {
   );
 
   // Create agent with SMS limiter
+  const userCredits = getUserCredits("user-123");
   const agent = createAgent({
     model,
     tools: [sendSms],
     middleware: [toolCallLimitMiddleware({
       toolName: "send_sms",
-      threadLimit: smsThreadLimit,
-      runLimit: smsRunLimit,
-      exitBehavior,
+      threadLimit: userCredits,
+      runLimit: userCredits,
+      exitBehavior: "error",
     })],
     checkpointer,
   });
