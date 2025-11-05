@@ -14,7 +14,7 @@ const SCENARIO_PROMPTS = {
     "Get all items from ID 1 to 5, check which ones have prime-numbered IDs, calculate the sum of their values, and tell me which category has the most items."
   ],
   "tool-call-limits": [
-    "Search for information about TypeScript and Python, then get all users with role 'user' and calculate the sum of their IDs."
+    "Hey, can you text my mom and let her know I'm on my way?"
   ],
 } as const;
 

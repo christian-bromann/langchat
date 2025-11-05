@@ -11,6 +11,7 @@ import type { EventType, UpdateData, AgentEventData, AIMessageChunk, ToolCall, A
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
+import { ErrorBubble } from "./ErrorBubble";
 import { useStatistics } from "@/app/contexts/StatisticsContext";
 
 interface ChatInterfaceProps {
@@ -50,6 +51,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const [interruptData, setInterruptData] = useState<HITLRequest | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(undefined);
   const [summarizations, setSummarizations] = useState<SummarizationEvent[]>([]);
+  const [errors, setErrors] = useState<Map<string, string>>(new Map()); // Map of AI message ID to error message
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
@@ -66,6 +68,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setCurrentThreadId(undefined);
     setInputValue("");
     setSummarizations([]);
+    setErrors(new Map());
     messageCountRef.current = 0;
     accumulatedContentRef.current = "";
     processedTokenMessagesRef.current = new Set();
@@ -396,13 +399,29 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         error: (error: Error) => {
           setIsLoading(false);
           const errorMessage = error.message || "Unknown error occurred";
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === currentAssistantId
-                ? new AIMessage({ ...msg, content: `Error: ${errorMessage}` })
-                : msg
-            )
-          );
+
+          // Store error associated with the current AI message
+          if (currentAssistantId) {
+            setErrors((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(currentAssistantId, errorMessage);
+              return newMap;
+            });
+          }
+
+          // Mark all pending tool calls (those without toolMessage) as errored
+          setToolCalls((prev) => {
+            const newMap = new Map<string, ToolCallState>();
+            for (const [id, toolCall] of prev) {
+              // If this tool call is associated with the current assistant message and has no toolMessage yet, mark it as errored
+              if (toolCall.aiMessageId === currentAssistantId && !toolCall.toolMessage) {
+                newMap.set(id, { ...toolCall, errored: true });
+              } else {
+                newMap.set(id, toolCall);
+              }
+            }
+            return newMap;
+          });
         },
       });
 
@@ -418,16 +437,44 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       );
     } catch (error) {
       console.error("Error sending message:", error);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === currentAssistantId
-            ? new AIMessage({
-                ...msg,
-                content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
-              })
-            : msg
-        )
-      );
+      setIsLoading(false);
+      const errorMessage = error instanceof Error ? error.message : "Failed to get response";
+
+      // If we have a current assistant ID, store the error and mark pending tool calls as errored
+      if (currentAssistantId) {
+        setErrors((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(currentAssistantId, errorMessage);
+          return newMap;
+        });
+
+        // Mark all pending tool calls as errored
+        setToolCalls((prev) => {
+          const newMap = new Map<string, ToolCallState>();
+          for (const [id, toolCall] of prev) {
+            if (toolCall.aiMessageId === currentAssistantId && !toolCall.toolMessage) {
+              newMap.set(id, { ...toolCall, errored: true });
+            } else {
+              newMap.set(id, toolCall);
+            }
+          }
+          return newMap;
+        });
+      } else {
+        // If there's no assistant message yet, create one with the error
+        // This handles cases where the error occurs before any response
+        const errorMsg = new AIMessage({
+          content: `Error: ${errorMessage}`,
+        });
+        setMessages((prev) => [...prev, errorMsg]);
+        setErrors((prev) => {
+          const newMap = new Map(prev);
+          if (errorMsg.id) {
+            newMap.set(errorMsg.id, errorMessage);
+          }
+          return newMap;
+        });
+      }
     }
   };
 
@@ -531,6 +578,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                       .sort((a, b) => a.timestamp - b.timestamp)
                   : [];
 
+                const errorMessage = message.id ? errors.get(message.id) : undefined;
+
                 return (
                   <div key={message.id || messageIndex}>
                     {/* Message */}
@@ -558,6 +607,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                     {associatedToolCalls.map((toolCallState) => (
                       <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
                     ))}
+                    {/* Error bubble associated with this message */}
+                    {errorMessage && AIMessage.isInstance(message) && (
+                      <ErrorBubble error={errorMessage} aiMessageId={message.id} />
+                    )}
                   </div>
                 );
               });

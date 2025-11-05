@@ -9,11 +9,6 @@ export async function POST(request: NextRequest) {
     const {
       message,
       apiKey,
-      globalThreadLimit,
-      globalRunLimit,
-      searchThreadLimit,
-      searchRunLimit,
-      exitBehavior,
       threadId
     } = body;
 
@@ -35,11 +30,6 @@ export async function POST(request: NextRequest) {
     const agentStream = await toolCallLimitsAgent({
       message,
       apiKey,
-      globalThreadLimit,
-      globalRunLimit,
-      searchThreadLimit,
-      searchRunLimit,
-      exitBehavior,
       threadId,
     });
 
