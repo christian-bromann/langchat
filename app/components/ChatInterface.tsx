@@ -948,6 +948,37 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
     return "update";
   };
 
+  // Helper function to handle different event types and call appropriate callbacks
+  const handleEvent = (eventType: EventType, eventData: unknown) => {
+    if (eventType === "end") {
+      callbacks.end?.();
+    } else if (eventType === "error") {
+      // Extract error message - prefer 'message' field over 'error' field
+      let errorMessage: string;
+      if (typeof eventData === "string") {
+        errorMessage = eventData;
+      } else if (eventData && typeof eventData === "object") {
+        const errorData = eventData as { message?: string; error?: string };
+        errorMessage = errorData.message || errorData.error || "Unknown error occurred";
+      } else {
+        errorMessage = "Unknown error occurred";
+      }
+      callbacks.error?.(new Error(errorMessage));
+    } else if (eventType === "agent_state") {
+      callbacks.agent_state?.(eventData as AgentStateEventData);
+    } else if (eventType === "model_request") {
+      callbacks.model_request?.(eventData as ModelRequestEventData);
+    } else if (eventType === "tools") {
+      callbacks.tools?.(eventData as ToolsEventData);
+    } else if (eventType === "interrupt") {
+      callbacks.interrupt?.(eventData as HITLRequest);
+    } else if (eventType === "update") {
+      callbacks.update?.(eventData as UpdateData);
+    } else if (eventType === "agent") {
+      callbacks.agent?.(eventData as AgentEventData);
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
@@ -962,24 +993,7 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
         }
 
         const eventType = currentEventType as EventType;
-        if (eventType === "end") {
-          callbacks.end?.();
-        } else if (eventType === "error") {
-          const errorMessage = typeof currentData === "string" ? currentData : (currentData as { error?: string })?.error || "Unknown error occurred";
-          callbacks.error?.(new Error(errorMessage));
-        } else if (eventType === "agent_state") {
-          callbacks.agent_state?.(currentData as AgentStateEventData);
-        } else if (eventType === "model_request") {
-          callbacks.model_request?.(currentData as ModelRequestEventData);
-        } else if (eventType === "tools") {
-          callbacks.tools?.(currentData as ToolsEventData);
-        } else if (eventType === "interrupt") {
-          callbacks.interrupt?.(currentData as HITLRequest);
-        } else if (eventType === "update") {
-          callbacks.update?.(currentData as UpdateData);
-        } else if (eventType === "agent") {
-          callbacks.agent?.(currentData as AgentEventData);
-        }
+        handleEvent(eventType, currentData);
       }
 
       // Always call end callback when stream completes
@@ -1007,33 +1021,7 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
 
           // Handle the transformed event
           const eventType = currentEventType as EventType;
-          if (eventType === "end") {
-            callbacks.end?.();
-          } else if (eventType === "error") {
-            // Extract error message - prefer 'message' field over 'error' field
-            let errorMessage: string;
-            if (typeof currentData === "string") {
-              errorMessage = currentData;
-            } else if (currentData && typeof currentData === "object") {
-              const errorData = currentData as { message?: string; error?: string };
-              errorMessage = errorData.message || errorData.error || "Unknown error occurred";
-            } else {
-              errorMessage = "Unknown error occurred";
-            }
-            callbacks.error?.(new Error(errorMessage));
-          } else if (eventType === "agent_state") {
-            callbacks.agent_state?.(currentData as AgentStateEventData);
-          } else if (eventType === "model_request") {
-            callbacks.model_request?.(currentData as ModelRequestEventData);
-          } else if (eventType === "tools") {
-            callbacks.tools?.(currentData as ToolsEventData);
-          } else if (eventType === "interrupt") {
-            callbacks.interrupt?.(currentData as HITLRequest);
-          } else if (eventType === "update") {
-            callbacks.update?.(currentData as UpdateData);
-          } else if (eventType === "agent") {
-            callbacks.agent?.(currentData as AgentEventData);
-          }
+          handleEvent(eventType, currentData);
 
           // Reset for next event
           currentEventType = null;
@@ -1071,33 +1059,7 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
     }
 
     const eventType = currentEventType as EventType;
-    if (eventType === "end") {
-      callbacks.end?.();
-    } else if (eventType === "error") {
-      // Extract error message - prefer 'message' field over 'error' field
-      let errorMessage: string;
-      if (typeof currentData === "string") {
-        errorMessage = currentData;
-      } else if (currentData && typeof currentData === "object") {
-        const errorData = currentData as { message?: string; error?: string };
-        errorMessage = errorData.message || errorData.error || "Unknown error occurred";
-      } else {
-        errorMessage = "Unknown error occurred";
-      }
-      callbacks.error?.(new Error(errorMessage));
-    } else if (eventType === "agent_state") {
-      callbacks.agent_state?.(currentData as AgentStateEventData);
-    } else if (eventType === "model_request") {
-      callbacks.model_request?.(currentData as ModelRequestEventData);
-    } else if (eventType === "tools") {
-      callbacks.tools?.(currentData as ToolsEventData);
-    } else if (eventType === "interrupt") {
-      callbacks.interrupt?.(currentData as HITLRequest);
-    } else if (eventType === "update") {
-      callbacks.update?.(currentData as UpdateData);
-    } else if (eventType === "agent") {
-      callbacks.agent?.(currentData as AgentEventData);
-    }
+    handleEvent(eventType, currentData);
   }
 }
 
