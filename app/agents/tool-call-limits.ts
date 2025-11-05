@@ -16,7 +16,6 @@ import { checkpointer } from "@/app/utils";
  * - Behavior adaptation when limits are reached
  * - Better UX through intelligent limit handling
  */
-
 const PHONE_BOOK: Record<string, string> = {
   "mom": "(212) 555-1234",
   "sister": "(310) 555-7890",
@@ -55,7 +54,6 @@ export async function toolCallLimitsAgent(options: {
 
       const recipientKey = input.recipient.toLowerCase();
       const phoneNumber = PHONE_BOOK[recipientKey] || "Unknown";
-      console.log("SEND IYT!!!")
 
       return {
         success: true,
