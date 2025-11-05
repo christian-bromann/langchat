@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { modelCallLimitsAgent } from "@/app/agents/model-call-limits";
-import { streamResponse } from "../utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the agent stream
-    const agentStream = await modelCallLimitsAgent({
+    return modelCallLimitsAgent({
       message,
       apiKey,
       threadLimit,
@@ -31,8 +30,6 @@ export async function POST(request: NextRequest) {
       exitBehavior,
       threadId,
     });
-
-    return streamResponse(agentStream);
   } catch (error) {
     return new Response(
       JSON.stringify({

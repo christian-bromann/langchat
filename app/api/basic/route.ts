@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { basicAgent } from "@/app/agents/basic";
-import { streamResponse } from "../utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,9 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the agent stream
-    const agentStream = await basicAgent({ message, apiKey });
-
-    return streamResponse(agentStream);
+    return basicAgent({ message, apiKey });
   } catch (error) {
     return new Response(
       JSON.stringify({

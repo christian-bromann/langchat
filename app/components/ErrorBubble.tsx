@@ -2,7 +2,6 @@
 
 interface ErrorBubbleProps {
   error: string;
-  aiMessageId?: string;
 }
 
 export function ErrorBubble({ error }: ErrorBubbleProps) {

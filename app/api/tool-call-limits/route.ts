@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { toolCallLimitsAgent } from "@/app/agents/tool-call-limits";
-import { streamResponse } from "../utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,13 +26,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the agent stream
-    const agentStream = await toolCallLimitsAgent({
+    return toolCallLimitsAgent({
       message,
       apiKey,
       threadId,
     });
-
-    return streamResponse(agentStream);
   } catch (error) {
     return new Response(
       JSON.stringify({

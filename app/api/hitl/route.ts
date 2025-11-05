@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import type { HITLResponse } from "langchain";
 
 import { hitlAgent } from "@/app/agents/hitl";
-import { streamResponse } from "../utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,14 +24,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const agentStream = await hitlAgent({
+    return hitlAgent({
       message,
       apiKey,
       threadId,
       interruptResponse: parseInterruptResponse(interruptResponse),
     });
-
-    return streamResponse(agentStream);
   } catch (error) {
     return new Response(
       JSON.stringify({

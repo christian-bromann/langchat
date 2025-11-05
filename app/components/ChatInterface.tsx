@@ -7,7 +7,7 @@ import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
 
 import { WelcomeScreen } from "./Welcome";
 import { EVENT_TYPES } from "@/app/constants";
-import type { EventType, UpdateData, AgentEventData, AIMessageChunk, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
+import type { EventType, UpdateData, AgentEventData, ToolCall, AgentStateEventData, ModelRequestEventData, ToolsEventData, ToolMessageData } from "@/app/types";
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
@@ -20,27 +20,39 @@ interface ChatInterfaceProps {
 }
 
 function isAIMessageChunk(chunk: unknown): boolean {
+  if (!chunk || typeof chunk !== "object") return false;
+
+  const chunkAny = chunk as Record<string, unknown>;
+
+  // Check for LangGraph native format (type: "ai")
+  if (chunkAny.type === "ai") return true;
+
+  // Check for old format (lc and id array)
   return Boolean(
-    chunk &&
-    typeof chunk === "object" &&
-    "lc" in chunk &&
-    "kwargs" in chunk &&
-    "id" in chunk &&
-    Array.isArray(chunk.id) &&
-    chunk.id[2] === "AIMessageChunk"
-  )
+    "lc" in chunkAny &&
+    "kwargs" in chunkAny &&
+    "id" in chunkAny &&
+    Array.isArray(chunkAny.id) &&
+    chunkAny.id[2] === "AIMessageChunk"
+  );
 }
 
 function isToolMessage(chunk: unknown): boolean {
+  if (!chunk || typeof chunk !== "object") return false;
+
+  const chunkAny = chunk as Record<string, unknown>;
+
+  // Check for LangGraph native format (type: "tool")
+  if (chunkAny.type === "tool") return true;
+
+  // Check for old format (lc and id array)
   return Boolean(
-    chunk &&
-    typeof chunk === "object" &&
-    "lc" in chunk &&
-    "kwargs" in chunk &&
-    "id" in chunk &&
-    Array.isArray(chunk.id) &&
-    chunk.id[2] === "ToolMessage"
-  )
+    "lc" in chunkAny &&
+    "kwargs" in chunkAny &&
+    "id" in chunkAny &&
+    Array.isArray(chunkAny.id) &&
+    chunkAny.id[2] === "ToolMessage"
+  );
 }
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
@@ -93,8 +105,23 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   }, [inputValue]);
 
   const updateToolCallArgs = useCallback((modelRequest: ModelRequestEventData) => {
-    const tc = modelRequest.model_request.messages
-      .find((msg) => msg.kwargs.tool_calls)?.kwargs.tool_calls || [] as ToolCall[];
+    // Handle both LangGraph native format (tool_calls directly on message) and our transformed format (kwargs.tool_calls)
+    const messages = modelRequest.model_request.messages;
+    let tc: ToolCall[] = [];
+
+    for (const msg of messages) {
+      // Check for LangGraph native format (tool_calls directly on message)
+      const msgAny = msg as unknown as Record<string, unknown>;
+      if ('tool_calls' in msgAny && Array.isArray(msgAny.tool_calls) && msgAny.tool_calls.length > 0) {
+        tc = msgAny.tool_calls as ToolCall[];
+        break;
+      }
+      // Check for our transformed format (kwargs.tool_calls)
+      if (msg.kwargs?.tool_calls && Array.isArray(msg.kwargs.tool_calls) && msg.kwargs.tool_calls.length > 0) {
+        tc = msg.kwargs.tool_calls as ToolCall[];
+        break;
+      }
+    }
 
     setToolCalls((prevToolCalls) => {
       const newMap = new Map<string, ToolCallState>();
@@ -185,8 +212,12 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       accumulatedContentByMessageRef.clear();
 
       // Helper function to update tool call state with tool message result
-      const updateToolCallWithMessage = (toolMsg: ToolMessageData) => {
-        const toolCallId = toolMsg.kwargs?.tool_call_id as string | undefined;
+      const updateToolCallWithMessage = (toolMsg: ToolMessageData | Record<string, unknown>) => {
+        // Handle both LangGraph native format (tool_call_id directly) and old format (kwargs.tool_call_id)
+        const toolMsgAny = toolMsg as Record<string, unknown>;
+        const toolCallId = (toolMsgAny.tool_call_id as string | undefined) ||
+          ((toolMsgAny.kwargs as Record<string, unknown>)?.tool_call_id as string | undefined);
+
         if (!toolCallId) {
           return;
         }
@@ -194,14 +225,23 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         setToolCalls((prev) => {
           const newMap = new Map(prev);
           const existing = newMap.get(toolCallId);
+
+          // Extract name from both formats
+          const name = (toolMsgAny.name as string | undefined) ||
+            ((toolMsgAny.kwargs as Record<string, unknown>)?.name as string | undefined) ||
+            "unknown";
+
           if (existing) {
-            newMap.set(toolCallId, { ...existing, toolMessage: toolMsg });
+            newMap.set(toolCallId, {
+              ...existing,
+              toolMessage: toolMsg
+            });
           } else {
             // If we haven't seen the tool call yet, create a placeholder
             newMap.set(toolCallId, {
               toolCall: {
                 id: toolCallId,
-                name: toolMsg.kwargs?.name as string || "unknown",
+                name,
                 args: {},
                 type: "tool_call"
               },
@@ -243,8 +283,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           return;
         }
 
-        const msg = data[0] as AIMessageChunk;
-        const msgId = msg.kwargs?.id as string | undefined;
+        const msg = data[0] as unknown as Record<string, unknown>;
+        // Handle both LangGraph native format (id as string) and old format (kwargs.id)
+        const msgId = typeof msg.id === "string" ? msg.id : (msg.kwargs as Record<string, unknown>)?.id as string | undefined;
         const messageId = msgId || currentAssistantId;
 
         // Check if this is a new AI message (different ID)
@@ -309,7 +350,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         }
 
         // Extract tool calls from the message
-        const toolCallsFromMsg = extractToolCallsFromMessage(msg);
+        // Handle both LangGraph native format (tool_calls directly) and old format (kwargs.tool_calls)
+        const msgAny = msg as Record<string, unknown>;
+        const toolCallsFromMsg = (msgAny.tool_calls as ToolCall[] | undefined) ||
+          ((msgAny.kwargs as Record<string, unknown>)?.tool_calls as ToolCall[] | undefined) ||
+          [];
         const associatedMessageId = msgId || currentAssistantId;
         for (const toolCall of toolCallsFromMsg) {
           setToolCalls((prev) => {
@@ -346,16 +391,17 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           const messages = data.model_request?.messages || [];
 
           for (const message of messages) {
-            // Track tokens
-            if (message.kwargs?.usage_metadata) {
-              const usage = message.kwargs.usage_metadata;
+            // Track tokens - handle both LangGraph native format (usage_metadata directly) and transformed format (kwargs.usage_metadata)
+            const msgAny = message as unknown as Record<string, unknown>;
+            const usage = (msgAny.usage_metadata as typeof message.kwargs.usage_metadata) || message.kwargs?.usage_metadata;
+            if (usage) {
               const input = usage.input_tokens || 0;
               const output = usage.output_tokens || 0;
               const total = usage.total_tokens || input + output;
 
               // Only track if we have valid token counts (input_tokens > 0 indicates final count)
               if (input > 0 && total > 0) {
-                const messageId = message.kwargs?.id as string | undefined;
+                const messageId = (msgAny.id as string | undefined) || message.kwargs?.id as string | undefined;
                 if (messageId && !processedTokenMessagesRef.current.has(messageId)) {
                   recordTokens(input, output, total);
                   processedTokenMessagesRef.current.add(messageId);
@@ -364,8 +410,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
             }
 
             // Track tool calls (only once per unique tool call ID across the conversation)
-            if (message.kwargs?.tool_calls && Array.isArray(message.kwargs.tool_calls)) {
-              for (const toolCall of message.kwargs.tool_calls) {
+            // Handle both LangGraph native format (tool_calls directly) and transformed format (kwargs.tool_calls)
+            const toolCalls = (msgAny.tool_calls as ToolCall[] | undefined) || message.kwargs?.tool_calls;
+            if (toolCalls && Array.isArray(toolCalls)) {
+              for (const toolCall of toolCalls) {
                 if (toolCall && typeof toolCall === "object" && "id" in toolCall && "name" in toolCall) {
                   const toolCallId = toolCall.id as string;
                   if (!processedToolCallIdsRef.current.has(toolCallId)) {
@@ -609,7 +657,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                     ))}
                     {/* Error bubble associated with this message */}
                     {errorMessage && AIMessage.isInstance(message) && (
-                      <ErrorBubble error={errorMessage} aiMessageId={message.id} />
+                      <ErrorBubble error={errorMessage} />
                     )}
                   </div>
                 );
@@ -703,10 +751,239 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
   }
 
   let buffer = "";
+  let currentEventType: string | null = null;
+  let currentData: unknown = null;
+
+  // Helper function to transform LangGraph's native event format into our expected format
+  const transformLangGraphEvent = (langGraphEventType: string, payload: unknown): { eventType: EventType; eventData: unknown } => {
+    let eventType: EventType = "update";
+    let eventData: unknown = payload;
+
+    // Check for interrupts (human-in-the-loop pauses)
+    if (langGraphEventType === "interrupt") {
+      eventType = "interrupt";
+      if (Array.isArray(payload) && payload.length > 0) {
+        const interruptValue = payload[0];
+        if (interruptValue && typeof interruptValue === "object" && "value" in interruptValue) {
+          const value = interruptValue.value as { actionRequests?: Array<{ name: string; args: Record<string, unknown>; description?: string }>; reviewConfigs?: unknown[] };
+          if (value?.actionRequests) {
+            eventData = {
+              actionRequests: value.actionRequests.map((ar) => ({
+                name: ar.name,
+                args: ar.args,
+                description: ar.description,
+              })),
+              reviewConfigs: value.reviewConfigs || [],
+            };
+          } else {
+            eventData = interruptValue;
+          }
+        } else {
+          eventData = interruptValue;
+        }
+      } else {
+        eventData = payload;
+      }
+    } else if (langGraphEventType === "values" && typeof payload === "object" && payload !== null) {
+      const values = payload as { __interrupt__?: unknown; [key: string]: unknown };
+
+      // Check for interrupt marker in values
+      if (values.__interrupt__) {
+        eventType = "interrupt";
+        const interruptArray = values.__interrupt__ as Array<{ value?: { actionRequests?: Array<{ name: string; args: Record<string, unknown>; description?: string }>; reviewConfigs?: unknown[] } }>;
+
+        // Extract action requests from interrupt
+        if (interruptArray && interruptArray.length > 0 && interruptArray[0]?.value?.actionRequests) {
+          eventData = {
+            actionRequests: interruptArray[0].value.actionRequests.map((ar) => ({
+              name: ar.name,
+              args: ar.args,
+              description: ar.description,
+            })),
+            reviewConfigs: interruptArray[0].value.reviewConfigs || [],
+          };
+        } else {
+          eventData = values.__interrupt__;
+        }
+      } else {
+        // Check data structure to determine event type
+        eventType = determineEventTypeFromPayload(payload);
+        eventData = payload;
+      }
+    } else if (langGraphEventType === "updates" && typeof payload === "object" && payload !== null) {
+      const updates = payload as { __interrupt__?: unknown; [key: string]: unknown };
+
+      // Check for interrupt marker in updates
+      if (updates.__interrupt__) {
+        eventType = "interrupt";
+        const interruptArray = updates.__interrupt__ as Array<{
+          id?: string;
+          value?: { actionRequests?: Array<{ name: string; args: Record<string, unknown>; description?: string }>; reviewConfigs?: unknown[] };
+        }>;
+
+        // Extract action requests from interrupt
+        if (interruptArray && interruptArray.length > 0 && interruptArray[0]?.value?.actionRequests) {
+          eventData = {
+            actionRequests: interruptArray[0].value.actionRequests.map((ar) => ({
+              name: ar.name,
+              args: ar.args,
+              description: ar.description,
+            })),
+            reviewConfigs: interruptArray[0].value.reviewConfigs || [],
+          };
+        } else {
+          eventData = updates.__interrupt__;
+        }
+      } else {
+        // Check data structure to determine event type
+        eventType = determineEventTypeFromPayload(payload);
+        eventData = payload;
+      }
+    } else if (langGraphEventType === "messages" && Array.isArray(payload)) {
+      // Check if it's a chunk update (array of [AIMessageChunk, LangGraphMetadata])
+      // LangGraph native format: [message, metadata] where message has type: "ai" or type: "tool"
+      if (payload.length === 2 && payload[0] && typeof payload[0] === "object" && payload[1] && typeof payload[1] === "object") {
+        const firstItem = payload[0] as Record<string, unknown>;
+        const secondItem = payload[1] as Record<string, unknown>;
+
+        // Check if second item is metadata (has langgraph_node)
+        if ("langgraph_node" in secondItem) {
+          // Check if first item is LangGraph native format message (has type property)
+          if ("type" in firstItem && (firstItem.type === "ai" || firstItem.type === "tool")) {
+            // Convert to update format for processUpdate to handle
+            eventType = "update";
+            eventData = payload; // Keep as [message, metadata] for processUpdate
+          } else if ("lc" in firstItem && firstItem.lc === 1) {
+            // Old format with lc property
+            eventType = "model_request";
+            eventData = { model_request: { messages: [payload[0]], _privateState: {} as Record<string, unknown> } };
+          }
+        } else {
+          // Not a [message, metadata] pair, try to find AI messages
+          const aiMessages = payload.filter((msg) => {
+            if (!msg || typeof msg !== "object") return false;
+            const msgAny = msg as Record<string, unknown>;
+            // Check for LangGraph native format (type: "ai")
+            if (msgAny.type === "ai") return true;
+            // Check for old format (lc and id array)
+            return (
+              "lc" in msgAny &&
+              msgAny.lc === 1 &&
+              "id" in msgAny &&
+              Array.isArray(msgAny.id) &&
+              msgAny.id[0] === "langchain_core" &&
+              msgAny.id[1] === "messages" &&
+              (msgAny.id[2] === "AIMessageChunk" || msgAny.id[2] === "AIMessage")
+            );
+          });
+
+          if (aiMessages.length > 0) {
+            eventType = "agent";
+            eventData = { messages: aiMessages };
+          }
+        }
+      } else if (payload.length > 0 && payload[0] && typeof payload[0] === "object") {
+        // Single message or array of messages - check for LangGraph native format
+        const firstMsg = payload[0] as Record<string, unknown>;
+        if (firstMsg.type === "ai" || firstMsg.type === "tool") {
+          // Convert to update format - wrap single message with metadata if available
+          const metadata = payload.length > 1 && typeof payload[1] === "object" && "langgraph_node" in payload[1]
+            ? payload[1]
+            : { langgraph_node: "unknown" };
+          eventType = "update";
+          eventData = [payload[0], metadata];
+        }
+      }
+    } else {
+      // For other update types, check data structure
+      if (typeof payload === "object" && payload !== null) {
+        eventType = determineEventTypeFromPayload(payload);
+        eventData = payload;
+      }
+    }
+
+    return { eventType, eventData };
+  };
+
+  // Helper function to determine event type from payload structure
+  const determineEventTypeFromPayload = (payload: unknown): EventType => {
+    if (typeof payload !== "object" || payload === null) {
+      return "update";
+    }
+
+    const data = payload as Record<string, unknown>;
+    const keys = Object.keys(data);
+
+    // Check for agent_state: has "messages" key (and optionally "_privateState")
+    if (keys.includes("messages") && Array.isArray(data.messages)) {
+      return "agent_state";
+    }
+
+    // Check for model_request: single "model_request" key
+    if (keys.length === 1 && keys[0] === "model_request" && data.model_request) {
+      return "model_request";
+    }
+
+    // Check for tools: single "tools" key
+    if (keys.length === 1 && keys[0] === "tools" && data.tools) {
+      return "tools";
+    }
+
+    // Check for chunk update: array of [AIMessageChunk, LangGraphMetadata]
+    if (Array.isArray(payload) && payload.length === 2) {
+      const first = payload[0] as unknown;
+      const second = payload[1] as unknown;
+      if (
+        typeof first === "object" &&
+        first !== null &&
+        "lc" in first &&
+        typeof second === "object" &&
+        second !== null &&
+        "langgraph_node" in second
+      ) {
+        return "model_request";
+      }
+    }
+
+    return "update";
+  };
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
+      // Process any remaining event in buffer before ending
+      if (currentEventType !== null && currentData !== null) {
+        const isLangGraphEvent = !EVENT_TYPES.includes(currentEventType as EventType);
+
+        if (isLangGraphEvent) {
+          const { eventType, eventData } = transformLangGraphEvent(currentEventType, currentData);
+          currentEventType = eventType;
+          currentData = eventData;
+        }
+
+        const eventType = currentEventType as EventType;
+        if (eventType === "end") {
+          callbacks.end?.();
+        } else if (eventType === "error") {
+          const errorMessage = typeof currentData === "string" ? currentData : (currentData as { error?: string })?.error || "Unknown error occurred";
+          callbacks.error?.(new Error(errorMessage));
+        } else if (eventType === "agent_state") {
+          callbacks.agent_state?.(currentData as AgentStateEventData);
+        } else if (eventType === "model_request") {
+          callbacks.model_request?.(currentData as ModelRequestEventData);
+        } else if (eventType === "tools") {
+          callbacks.tools?.(currentData as ToolsEventData);
+        } else if (eventType === "interrupt") {
+          callbacks.interrupt?.(currentData as HITLRequest);
+        } else if (eventType === "update") {
+          callbacks.update?.(currentData as UpdateData);
+        } else if (eventType === "agent") {
+          callbacks.agent?.(currentData as AgentEventData);
+        }
+      }
+
+      // Always call end callback when stream completes
+      callbacks.end?.();
       break;
     }
 
@@ -714,68 +991,133 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
 
-    let currentEventType: EventType = "update";
     for (const line of lines) {
-      if (!line) {
+      if (!line.trim()) {
+        // Empty line signals end of event, process it
+        if (currentEventType !== null && currentData !== null) {
+          // Check if this is a LangGraph native event type or our custom format
+          const isLangGraphEvent = !EVENT_TYPES.includes(currentEventType as EventType);
+
+          if (isLangGraphEvent) {
+            // Transform LangGraph event format
+            const { eventType, eventData } = transformLangGraphEvent(currentEventType, currentData);
+            currentEventType = eventType;
+            currentData = eventData;
+          }
+
+          // Handle the transformed event
+          const eventType = currentEventType as EventType;
+          if (eventType === "end") {
+            callbacks.end?.();
+          } else if (eventType === "error") {
+            // Extract error message - prefer 'message' field over 'error' field
+            let errorMessage: string;
+            if (typeof currentData === "string") {
+              errorMessage = currentData;
+            } else if (currentData && typeof currentData === "object") {
+              const errorData = currentData as { message?: string; error?: string };
+              errorMessage = errorData.message || errorData.error || "Unknown error occurred";
+            } else {
+              errorMessage = "Unknown error occurred";
+            }
+            callbacks.error?.(new Error(errorMessage));
+          } else if (eventType === "agent_state") {
+            callbacks.agent_state?.(currentData as AgentStateEventData);
+          } else if (eventType === "model_request") {
+            callbacks.model_request?.(currentData as ModelRequestEventData);
+          } else if (eventType === "tools") {
+            callbacks.tools?.(currentData as ToolsEventData);
+          } else if (eventType === "interrupt") {
+            callbacks.interrupt?.(currentData as HITLRequest);
+          } else if (eventType === "update") {
+            callbacks.update?.(currentData as UpdateData);
+          } else if (eventType === "agent") {
+            callbacks.agent?.(currentData as AgentEventData);
+          }
+
+          // Reset for next event
+          currentEventType = null;
+          currentData = null;
+        }
         continue;
       }
 
       if (line.startsWith("event: ")) {
-        currentEventType = line.slice(7).trim() as EventType;
-        if (!EVENT_TYPES.includes(currentEventType)) {
-          throw new Error(`Unknown event type: ${currentEventType}`);
-        }
-        continue
+        currentEventType = line.slice(7).trim();
+        continue;
       }
 
       if (line.startsWith("data: ")) {
         const dataStr = line.slice(6);
         try {
-          const data = JSON.parse(dataStr);
-          // Handle different event types with appropriate callbacks
-          if (currentEventType === "end") {
-            callbacks.end?.();
-          } else if (currentEventType === "error") {
-            // Convert error data to Error object
-            const errorMessage = typeof data === "string" ? data : data?.error || "Unknown error occurred";
-            callbacks.error?.(new Error(errorMessage));
-          } else if (currentEventType === "agent_state") {
-            callbacks.agent_state?.(data as AgentStateEventData);
-          } else if (currentEventType === "model_request") {
-            callbacks.model_request?.(data as ModelRequestEventData);
-          } else if (currentEventType === "tools") {
-            callbacks.tools?.(data as ToolsEventData);
-          } else if (currentEventType === "interrupt") {
-            callbacks.interrupt?.(data as HITLRequest);
-          } else {
-            if (!(currentEventType in callbacks)) {
-              throw new Error(`Unknown event type: ${currentEventType}`);
-            }
-
-            callbacks[currentEventType]?.(data);
-          }
+          currentData = JSON.parse(dataStr);
         } catch (error) {
           console.error("Error parsing stream data:", error);
-          // If parsing fails, treat it as an error event
           callbacks.error?.(error instanceof Error ? error : new Error("Failed to parse stream data"));
         }
-
         continue;
       }
+    }
+  }
 
-      console.error("Unknown line in stream:", line);
+  // Process any remaining event in buffer
+  if (currentEventType !== null && currentData !== null) {
+    const isLangGraphEvent = !EVENT_TYPES.includes(currentEventType as EventType);
+
+    if (isLangGraphEvent) {
+      const { eventType, eventData } = transformLangGraphEvent(currentEventType, currentData);
+      currentEventType = eventType;
+      currentData = eventData;
+    }
+
+    const eventType = currentEventType as EventType;
+    if (eventType === "end") {
+      callbacks.end?.();
+    } else if (eventType === "error") {
+      // Extract error message - prefer 'message' field over 'error' field
+      let errorMessage: string;
+      if (typeof currentData === "string") {
+        errorMessage = currentData;
+      } else if (currentData && typeof currentData === "object") {
+        const errorData = currentData as { message?: string; error?: string };
+        errorMessage = errorData.message || errorData.error || "Unknown error occurred";
+      } else {
+        errorMessage = "Unknown error occurred";
+      }
+      callbacks.error?.(new Error(errorMessage));
+    } else if (eventType === "agent_state") {
+      callbacks.agent_state?.(currentData as AgentStateEventData);
+    } else if (eventType === "model_request") {
+      callbacks.model_request?.(currentData as ModelRequestEventData);
+    } else if (eventType === "tools") {
+      callbacks.tools?.(currentData as ToolsEventData);
+    } else if (eventType === "interrupt") {
+      callbacks.interrupt?.(currentData as HITLRequest);
+    } else if (eventType === "update") {
+      callbacks.update?.(currentData as UpdateData);
+    } else if (eventType === "agent") {
+      callbacks.agent?.(currentData as AgentEventData);
     }
   }
 }
 
 // Helper function to extract incremental text from AIMessageChunk content array
 // This extracts only the new text from content items of type "text"
-const extractIncrementalTextFromChunk = (msg: AIMessageChunk): string | null => {
-  if (!msg.kwargs?.content) {
-    return null;
+// Handles both LangGraph native format (content directly on message) and old format (kwargs.content)
+const extractIncrementalTextFromChunk = (msg: unknown): string | null => {
+  const msgAny = msg as Record<string, unknown>;
+
+  // Handle LangGraph native format (content directly on message)
+  let content = msgAny.content;
+
+  // Fall back to old format (kwargs.content)
+  if (!content && msgAny.kwargs && typeof msgAny.kwargs === "object") {
+    content = (msgAny.kwargs as Record<string, unknown>).content;
   }
 
-  const content = msg.kwargs.content;
+  if (!content) {
+    return null;
+  }
 
   // If content is a string, return it
   if (typeof content === "string") {
@@ -799,14 +1141,4 @@ const extractIncrementalTextFromChunk = (msg: AIMessageChunk): string | null => 
   }
 
   return null;
-};
-
-// Helper function to extract tool calls from AIMessageChunk
-const extractToolCallsFromMessage = (msg: AIMessageChunk): ToolCall[] => {
-  if (msg.kwargs?.tool_calls && Array.isArray(msg.kwargs.tool_calls)) {
-    return msg.kwargs.tool_calls.filter((tc): tc is ToolCall =>
-      tc && typeof tc === "object" && "name" in tc && "args" in tc && "id" in tc
-    );
-  }
-  return [];
 };

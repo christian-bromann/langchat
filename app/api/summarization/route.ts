@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { summarizationAgent } from "@/app/agents/summarization";
-import { streamResponse } from "../utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,9 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the agent stream
-    const agentStream = await summarizationAgent({ message, apiKey, threadId });
-
-    return streamResponse(agentStream);
+    return summarizationAgent({ message, apiKey, threadId });
   } catch (error) {
     return new Response(
       JSON.stringify({

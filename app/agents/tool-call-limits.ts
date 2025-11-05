@@ -93,10 +93,16 @@ export async function toolCallLimitsAgent(options: {
     messages: [new HumanMessage(options.message)],
   };
 
-  return agent.stream(initialState, {
+  const stream = await agent.stream(initialState, {
+    // @ts-expect-error - not yet updated
+    encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50, // High recursion limit to allow many calls before hitting the middleware limit
     configurable: { thread_id: threadId },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "text/event-stream" },
   });
 }
 

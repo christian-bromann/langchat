@@ -56,9 +56,15 @@ export async function basicAgent(options: { message: string; apiKey: string; mod
     systemPrompt: "You are a helpful assistant that can get information about customers.",
   });
 
-  return agent.stream(initialState, {
+  const stream = await agent.stream(initialState, {
+    // @ts-expect-error - not yet updated
+    encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 10,
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "text/event-stream" },
   });
 }
 
