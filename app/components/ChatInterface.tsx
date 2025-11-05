@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import type { HITLRequest } from "langchain";
 import { HumanMessage, BaseMessage, AIMessage } from "@langchain/core/messages";
@@ -54,6 +54,14 @@ function isToolMessage(chunk: unknown): boolean {
     chunkAny.id[2] === "ToolMessage"
   );
 }
+
+// API endpoint mapping - extracted to avoid repeated if-else chain
+const API_ENDPOINTS: Record<string, string> = {
+  "human-in-the-loop": "/api/hitl",
+  "summarization": "/api/summarization",
+  "model-call-limits": "/api/model-call-limits",
+  "tool-call-limits": "/api/tool-call-limits",
+} as const;
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<BaseMessage[]>([]);
@@ -136,7 +144,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     });
   }, []);
 
-  const handleSend = async (messageOverride?: string, interruptResponse?: { decisions: Array<{ type: "approve" | "reject" | "edit"; editedAction?: { name: string; args: Record<string, unknown> }; message?: string }> } ) => {
+  const handleSend = useCallback(async (messageOverride?: string, interruptResponse?: { decisions: Array<{ type: "approve" | "reject" | "edit"; editedAction?: { name: string; args: Record<string, unknown> }; message?: string }> } ) => {
     const messageToSend = messageOverride || inputValue;
 
     // Allow sending if we have a message OR if we're resuming from an interrupt
@@ -169,16 +177,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
     try {
       // Determine API endpoint based on selected scenario
-      let apiEndpoint = "/api/basic";
-      if (selectedScenario === "human-in-the-loop") {
-        apiEndpoint = "/api/hitl";
-      } else if (selectedScenario === "summarization") {
-        apiEndpoint = "/api/summarization";
-      } else if (selectedScenario === "model-call-limits") {
-        apiEndpoint = "/api/model-call-limits";
-      } else if (selectedScenario === "tool-call-limits") {
-        apiEndpoint = "/api/tool-call-limits";
-      }
+      const apiEndpoint = selectedScenario ? (API_ENDPOINTS[selectedScenario] || "/api/basic") : "/api/basic";
 
       // Generate or use existing thread ID
       const threadId = currentThreadId || `thread-${Date.now()}`;
@@ -459,30 +458,26 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
           // Mark all pending tool calls (those without toolMessage) as errored
           setToolCalls((prev) => {
-            const newMap = new Map<string, ToolCallState>();
+            // Only create new Map if we have pending tool calls to mark as errored
+            let needsUpdate = false;
+            for (const toolCall of prev.values()) {
+              if (toolCall.aiMessageId === currentAssistantId && !toolCall.toolMessage && !toolCall.errored) {
+                needsUpdate = true;
+                break;
+              }
+            }
+            if (!needsUpdate) return prev;
+
+            const newMap = new Map(prev);
             for (const [id, toolCall] of prev) {
-              // If this tool call is associated with the current assistant message and has no toolMessage yet, mark it as errored
               if (toolCall.aiMessageId === currentAssistantId && !toolCall.toolMessage) {
                 newMap.set(id, { ...toolCall, errored: true });
-              } else {
-                newMap.set(id, toolCall);
               }
             }
             return newMap;
           });
         },
       });
-
-      // Ensure all content is displayed when stream ends
-      setMessages((prev) =>
-        prev.map((msg) => {
-          const msgAccumulated = accumulatedContentByMessageRef.get(msg.id || "") || "";
-          if (msgAccumulated && msgAccumulated !== msg.content) {
-            return new AIMessage({ ...msg, content: msgAccumulated });
-          }
-          return msg;
-        })
-      );
     } catch (error) {
       console.error("Error sending message:", error);
       setIsLoading(false);
@@ -498,12 +493,20 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
         // Mark all pending tool calls as errored
         setToolCalls((prev) => {
-          const newMap = new Map<string, ToolCallState>();
+          // Only create new Map if we have pending tool calls to mark as errored
+          let needsUpdate = false;
+          for (const toolCall of prev.values()) {
+            if (toolCall.aiMessageId === currentAssistantId && !toolCall.toolMessage && !toolCall.errored) {
+              needsUpdate = true;
+              break;
+            }
+          }
+          if (!needsUpdate) return prev;
+
+          const newMap = new Map(prev);
           for (const [id, toolCall] of prev) {
             if (toolCall.aiMessageId === currentAssistantId && !toolCall.toolMessage) {
               newMap.set(id, { ...toolCall, errored: true });
-            } else {
-              newMap.set(id, toolCall);
             }
           }
           return newMap;
@@ -524,9 +527,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         });
       }
     }
-  };
+  }, [inputValue, selectedScenario, isLoading, apiKey, currentThreadId, recordToolCall, recordModelCall, recordTokens, updateToolCallArgs]);
 
-  const handleInterruptApprove = async () => {
+  const handleInterruptApprove = useCallback(async () => {
     if (!interruptData) return;
 
     const interruptResponse = {
@@ -537,9 +540,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
     setInterruptData(null);
     await handleSend("", interruptResponse);
-  };
+  }, [interruptData, handleSend]);
 
-  const handleInterruptReject = async (message?: string) => {
+  const handleInterruptReject = useCallback(async (message?: string) => {
     if (!interruptData) return;
 
     const interruptResponse = {
@@ -551,9 +554,9 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
     setInterruptData(null);
     await handleSend("", interruptResponse);
-  };
+  }, [interruptData, handleSend]);
 
-  const handleInterruptEdit = async (editedArgs: Record<string, unknown>) => {
+  const handleInterruptEdit = useCallback(async (editedArgs: Record<string, unknown>) => {
     if (!interruptData) return;
 
     const actionRequest = interruptData.actionRequests[0];
@@ -569,14 +572,57 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
     setInterruptData(null);
     await handleSend("", interruptResponse);
-  };
+  }, [interruptData, handleSend]);
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
+
+  // Memoize tool calls by message ID for efficient lookups
+  const toolCallsByMessageId = useMemo(() => {
+    const map = new Map<string, ToolCallState[]>();
+    for (const toolCall of toolCalls.values()) {
+      if (toolCall.aiMessageId) {
+        const existing = map.get(toolCall.aiMessageId) || [];
+        existing.push(toolCall);
+        map.set(toolCall.aiMessageId, existing);
+      }
+    }
+    // Sort each array by timestamp
+    for (const [messageId, calls] of map.entries()) {
+      map.set(messageId, calls.sort((a, b) => a.timestamp - b.timestamp));
+    }
+    return map;
+  }, [toolCalls]);
+
+  // Memoize the combined messages and summarizations array
+  const renderedItems = useMemo(() => {
+    // Create a combined array of messages and summarizations
+    const items: Array<{ type: 'message' | 'summarization'; data: BaseMessage | SummarizationEvent; index: number }> = [];
+
+    // Add all messages
+    messages.forEach((msg, index) => {
+      items.push({ type: 'message', data: msg, index });
+    });
+
+    // Add summarizations at their correct positions
+    summarizations.forEach((summ) => {
+      // Insert summarization after the specified message index
+      items.push({
+        type: 'summarization',
+        data: summ,
+        index: summ.afterMessageIndex + 0.5 // Use 0.5 to place between messages
+      });
+    });
+
+    // Sort by index (messages have integer indices, summarizations have index + 0.5)
+    items.sort((a, b) => a.index - b.index);
+
+    return items;
+  }, [messages, summarizations]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -589,80 +635,55 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         ) : (
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Render messages and summarizations interleaved */}
-            {(() => {
-              // Create a combined array of messages and summarizations
-              const items: Array<{ type: 'message' | 'summarization'; data: BaseMessage | SummarizationEvent; index: number }> = [];
+            {renderedItems.map((item) => {
+              if (item.type === 'summarization') {
+                return <SummarizationBubble key={item.data.id} summary={item.data as SummarizationEvent} />;
+              }
 
-              // Add all messages
-              messages.forEach((msg, index) => {
-                items.push({ type: 'message', data: msg, index });
-              });
+              const message = item.data as BaseMessage;
+              const messageIndex = Math.floor(item.index);
 
-              // Add summarizations at their correct positions
-              summarizations.forEach((summ) => {
-                // Insert summarization after the specified message index
-                items.push({
-                  type: 'summarization',
-                  data: summ,
-                  index: summ.afterMessageIndex + 0.5 // Use 0.5 to place between messages
-                });
-              });
+              // Get tool calls associated with this AI message - use memoized map
+              const associatedToolCalls = AIMessage.isInstance(message) && message.id
+                ? (toolCallsByMessageId.get(message.id) || [])
+                : [];
 
-              // Sort by index (messages have integer indices, summarizations have index + 0.5)
-              items.sort((a, b) => a.index - b.index);
+              const errorMessage = message.id ? errors.get(message.id) : undefined;
 
-              return items.map((item) => {
-                if (item.type === 'summarization') {
-                  return <SummarizationBubble key={item.data.id} summary={item.data as SummarizationEvent} />;
-                }
-
-                const message = item.data as BaseMessage;
-                const messageIndex = Math.floor(item.index);
-
-                // Get tool calls associated with this AI message
-                const associatedToolCalls = AIMessage.isInstance(message) && message.id
-                  ? Array.from(toolCalls.values())
-                      .filter((tc) => tc.aiMessageId === message.id)
-                      .sort((a, b) => a.timestamp - b.timestamp)
-                  : [];
-
-                const errorMessage = message.id ? errors.get(message.id) : undefined;
-
-                return (
-                  <div key={message.id || messageIndex}>
-                    {/* Message */}
-                    {message.content !== "" && <div
-                      className={`flex ${
-                        HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
+              return (
+                <div key={message.id || messageIndex}>
+                  {/* Message */}
+                  {message.content !== "" && <div
+                    className={`flex ${
+                      HumanMessage.isInstance(message) ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                        HumanMessage.isInstance(message)
+                          ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+                          : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       }`}
                     >
-                      <div
-                        className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                          HumanMessage.isInstance(message)
-                            ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                            : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">
-                          {message.content as string}
-                          {messageIndex === messages.length - 1 && isLoading && (
-                            <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
-                          )}
-                        </p>
-                      </div>
-                    </div>}
-                    {/* Tool calls associated with this message */}
-                    {associatedToolCalls.map((toolCallState) => (
-                      <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
-                    ))}
-                    {/* Error bubble associated with this message */}
-                    {errorMessage && AIMessage.isInstance(message) && (
-                      <ErrorBubble error={errorMessage} />
-                    )}
-                  </div>
-                );
-              });
-            })()}
+                      <p className="whitespace-pre-wrap">
+                        {message.content as string}
+                        {messageIndex === messages.length - 1 && isLoading && (
+                          <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-600 ml-1 animate-pulse" />
+                        )}
+                      </p>
+                    </div>
+                  </div>}
+                  {/* Tool calls associated with this message */}
+                  {associatedToolCalls.map((toolCallState) => (
+                    <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
+                  ))}
+                  {/* Error bubble associated with this message */}
+                  {errorMessage && AIMessage.isInstance(message) && (
+                    <ErrorBubble error={errorMessage} />
+                  )}
+                </div>
+              );
+            })}
             {/* Interrupt Bubble - shown below messages when interrupt occurs */}
             {interruptData && (
               <InterruptBubble
