@@ -17,6 +17,14 @@ function getUserCredits(userId: string) {
   return 2;
 }
 
+const PHONE_BOOK: Record<string, string> = {
+  "mom": "(212) 555-1234",
+  "sister": "(310) 555-7890",
+  "alice": "(312) 555-4567",
+  "dad": "(305) 555-2345",
+  "uncle": "(206) 555-6789",
+};
+
 /**
  * SMS Sending Agent - demonstrates tool call limits with credit-based resource management
  *
@@ -29,14 +37,6 @@ function getUserCredits(userId: string) {
  * - Behavior adaptation when limits are reached
  * - Better UX through intelligent limit handling
  */
-const PHONE_BOOK: Record<string, string> = {
-  "mom": "(212) 555-1234",
-  "sister": "(310) 555-7890",
-  "alice": "(312) 555-4567",
-  "dad": "(305) 555-2345",
-  "uncle": "(206) 555-6789",
-};
-
 export async function toolCallLimitsAgent(options: {
   message: string;
   apiKey: string;
@@ -47,8 +47,6 @@ export async function toolCallLimitsAgent(options: {
     model: "claude-sonnet-4-5-20250929",
     apiKey: options.apiKey,
   });
-
-  const threadId = options.threadId || `thread-${Date.now()}`;
 
   // Send SMS tool - costs 1 credit per call
   const sendSms = tool(
@@ -101,7 +99,7 @@ export async function toolCallLimitsAgent(options: {
     encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50, // High recursion limit to allow many calls before hitting the middleware limit
-    configurable: { thread_id: threadId },
+    configurable: { thread_id: options.threadId },
   });
 
   return new Response(stream, {
