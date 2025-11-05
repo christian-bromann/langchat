@@ -32,8 +32,10 @@ export function ErrorBubble({ error }: ErrorBubbleProps) {
           {/* Error Message */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-red-200 dark:border-red-800">
             <p className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap">
-              {error.includes("'send_sms' tool call limit reached")
+              {error.includes("thread limit exceeded")
                ? "You have reached the limit of SMS credits. Please purchase more credits to continue."
+               : error.includes("run limit exceeded")
+               ? "You can't send more than 2 SMS messages per session, upgrade your plan to send more messages."
                : error}
             </p>
           </div>

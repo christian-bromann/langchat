@@ -44,7 +44,7 @@ export async function toolCallLimitsAgent(options: {
 }) {
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
-    model: "claude-4-sonnet-latest",
+    model: "claude-sonnet-4-5-20250929",
     apiKey: options.apiKey,
   });
 
