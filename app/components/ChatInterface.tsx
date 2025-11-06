@@ -61,6 +61,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "summarization": "/api/summarization",
   "model-call-limits": "/api/model-call-limits",
   "tool-call-limits": "/api/tool-call-limits",
+  "todo-list": "/api/todo-list",
 } as const;
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {

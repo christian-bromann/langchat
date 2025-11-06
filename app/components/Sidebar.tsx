@@ -15,6 +15,7 @@ const scenarios: AgentScenario[] = [
   { id: "summarization", name: "Summarization" },
   { id: "model-call-limits", name: "Model Call Limits" },
   { id: "tool-call-limits", name: "Tool Call Limits" },
+  { id: "todo-list", name: "Todo List" },
 ];
 
 interface SidebarProps {

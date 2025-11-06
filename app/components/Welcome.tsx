@@ -16,6 +16,9 @@ const SCENARIO_PROMPTS = {
   "tool-call-limits": [
     "Hey, can you text my mom and let her know I'm on my way?"
   ],
+  "todo-list": [
+    "Plan a 5-day trip to Los Angeles from NYC, leaving March 15th and returning March 22nd. Include flight options, hotel recommendations, activities, and a packing list."
+  ],
 } as const;
 
 interface WelcomeScreenProps {
