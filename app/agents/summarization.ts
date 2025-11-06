@@ -330,7 +330,6 @@ export async function summarizationAgent(options: {
 
   // Stream with thread ID for state persistence
   const stream = await agent.stream(initialState, {
-    // @ts-expect-error - not yet updated
     encoding: "text/event-stream",
     ...config,
     streamMode: ["values", "updates", "messages"],

@@ -36,6 +36,8 @@ export function ErrorBubble({ error }: ErrorBubbleProps) {
                ? "You have reached the limit of SMS credits. Please purchase more credits to continue."
                : error.includes("run limit exceeded")
                ? "You can't send more than 2 SMS messages per session, upgrade your plan to send more messages."
+               : error.includes("Model call limits exceeded")
+               ? "It seems like I am having a hard time answering your question. Please contact our support team at (415) 555-1234."
                : error}
             </p>
           </div>

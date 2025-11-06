@@ -95,7 +95,6 @@ export async function toolCallLimitsAgent(options: {
   };
 
   const stream = await agent.stream(initialState, {
-    // @ts-expect-error - not yet updated
     encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50, // High recursion limit to allow many calls before hitting the middleware limit

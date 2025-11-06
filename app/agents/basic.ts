@@ -57,7 +57,6 @@ export async function basicAgent(options: { message: string; apiKey: string; mod
   });
 
   const stream = await agent.stream(initialState, {
-    // @ts-expect-error - not yet updated
     encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 10,

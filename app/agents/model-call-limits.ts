@@ -66,7 +66,7 @@ export async function modelCallLimitsAgent(options: {
 }) {
   const modelName = options.model ?? "claude-3-7-sonnet-latest";
   const threadLimit = options.threadLimit ?? 30;
-  const runLimit = options.runLimit ?? 5;
+  const runLimit = options.runLimit ?? 10;
   const exitBehavior = options.exitBehavior ?? "throw" as const;
 
   // Create the Anthropic model instance with user-provided API key
@@ -255,7 +255,6 @@ Always be helpful, professional, and provide complete information to the custome
 
   const threadId = options.threadId || `thread-${Date.now()}`;
   const stream = await agent.stream(initialState, {
-    // @ts-expect-error - not yet updated
     encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50, // High recursion limit to allow many calls before hitting the middleware limit
