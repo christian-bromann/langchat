@@ -4,45 +4,26 @@ import { ChatAnthropic } from "@langchain/anthropic";
 
 import { checkpointer } from "@/app/utils";
 
-/**
- * TodoList Middleware agent - demonstrates task planning and tracking for complex multi-step tasks
- *
- * Scenario: AI Travel Planner Agent
- * This agent helps users plan trips by breaking down complex travel planning into structured tasks.
- * It uses the TodoList middleware to create and track tasks like:
- * - Gathering travel dates and preferences
- * - Finding flight options
- * - Comparing hotels
- * - Suggesting itinerary
- * - Preparing packing checklist
- *
- * This demonstrates:
- * - Complex multi-step workflows that benefit from structured task planning
- * - Task tracking across multiple agent turns
- * - Long-running operations where progress visibility is important
- * - Breaking down complex problems into manageable steps
- */
-
-// Sample flight database
-const FLIGHTS = [
-  { id: "FL001", from: "NYC", to: "LAX", date: "2024-03-15", price: 299, airline: "Delta", duration: "6h 30m" },
-  { id: "FL002", from: "NYC", to: "LAX", date: "2024-03-15", price: 349, airline: "United", duration: "6h 15m" },
-  { id: "FL003", from: "NYC", to: "LAX", date: "2024-03-15", price: 279, airline: "American", duration: "6h 45m" },
-  { id: "FL004", from: "NYC", to: "SFO", date: "2024-03-15", price: 329, airline: "Delta", duration: "6h 0m" },
-  { id: "FL005", from: "NYC", to: "SFO", date: "2024-03-15", price: 379, airline: "United", duration: "5h 45m" },
-  { id: "FL006", from: "LAX", to: "NYC", date: "2024-03-22", price: 299, airline: "Delta", duration: "6h 30m" },
-  { id: "FL007", from: "LAX", to: "NYC", date: "2024-03-22", price: 349, airline: "United", duration: "6h 15m" },
-  { id: "FL008", from: "SFO", to: "NYC", date: "2024-03-22", price: 329, airline: "Delta", duration: "6h 0m" },
+// Sample flight database with base prices
+const FLIGHTS_BASE = [
+  { id: "FL001", from: "NYC", to: "LAX", date: "2024-03-15", basePrice: 299, airline: "Delta", duration: "6h 30m" },
+  { id: "FL002", from: "NYC", to: "LAX", date: "2024-03-15", basePrice: 349, airline: "United", duration: "6h 15m" },
+  { id: "FL003", from: "NYC", to: "LAX", date: "2024-03-15", basePrice: 279, airline: "American", duration: "6h 45m" },
+  { id: "FL004", from: "NYC", to: "SFO", date: "2024-03-15", basePrice: 329, airline: "Delta", duration: "6h 0m" },
+  { id: "FL005", from: "NYC", to: "SFO", date: "2024-03-15", basePrice: 379, airline: "United", duration: "5h 45m" },
+  { id: "FL006", from: "LAX", to: "NYC", date: "2024-03-22", basePrice: 299, airline: "Delta", duration: "6h 30m" },
+  { id: "FL007", from: "LAX", to: "NYC", date: "2024-03-22", basePrice: 349, airline: "United", duration: "6h 15m" },
+  { id: "FL008", from: "SFO", to: "NYC", date: "2024-03-22", basePrice: 329, airline: "Delta", duration: "6h 0m" },
 ];
 
-// Sample hotels database
-const HOTELS = [
-  { id: "HT001", city: "LAX", name: "Grand Hotel LA", price: 150, rating: 4.5, amenities: ["WiFi", "Pool", "Gym"] },
-  { id: "HT002", city: "LAX", name: "Beachside Resort", price: 200, rating: 4.8, amenities: ["WiFi", "Pool", "Gym", "Spa"] },
-  { id: "HT003", city: "LAX", name: "City Center Inn", price: 100, rating: 4.0, amenities: ["WiFi", "Breakfast"] },
-  { id: "HT004", city: "SFO", name: "Bay View Hotel", price: 180, rating: 4.6, amenities: ["WiFi", "Pool", "Gym"] },
-  { id: "HT005", city: "SFO", name: "Downtown Plaza", price: 140, rating: 4.3, amenities: ["WiFi", "Gym", "Restaurant"] },
-  { id: "HT006", city: "SFO", name: "Tech Hub Inn", price: 120, rating: 4.2, amenities: ["WiFi", "Breakfast", "Gym"] },
+// Sample hotels database with availability tracking
+const HOTELS_BASE = [
+  { id: "HT001", city: "LAX", name: "Grand Hotel LA", basePrice: 150, rating: 4.5, amenities: ["WiFi", "Pool", "Gym"], availability: 5 },
+  { id: "HT002", city: "LAX", name: "Beachside Resort", basePrice: 200, rating: 4.8, amenities: ["WiFi", "Pool", "Gym", "Spa"], availability: 3 },
+  { id: "HT003", city: "LAX", name: "City Center Inn", basePrice: 100, rating: 4.0, amenities: ["WiFi", "Breakfast"], availability: 8 },
+  { id: "HT004", city: "SFO", name: "Bay View Hotel", basePrice: 180, rating: 4.6, amenities: ["WiFi", "Pool", "Gym"], availability: 4 },
+  { id: "HT005", city: "SFO", name: "Downtown Plaza", basePrice: 140, rating: 4.3, amenities: ["WiFi", "Gym", "Restaurant"], availability: 6 },
+  { id: "HT006", city: "SFO", name: "Tech Hub Inn", basePrice: 120, rating: 4.2, amenities: ["WiFi", "Breakfast", "Gym"], availability: 7 },
 ];
 
 // Sample activities database
@@ -71,6 +52,31 @@ const WEATHER_DATA: Record<string, Record<string, string>> = {
   },
 };
 
+// Track search state to penalize poor planning (e.g., multiple searches increase prices)
+const searchState = {
+  flightSearches: 0,
+  hotelSearches: 0,
+  lastSearchedCity: null as string | null,
+};
+
+/**
+ * TodoList Middleware agent - demonstrates task planning and tracking for complex multi-step tasks
+ *
+ * Scenario: AI Travel Planner Agent
+ * This agent helps users plan trips by breaking down complex travel planning into structured tasks.
+ * It uses the TodoList middleware to create and track tasks like:
+ * - Gathering travel dates and preferences
+ * - Finding flight options
+ * - Comparing hotels
+ * - Suggesting itinerary
+ * - Preparing packing checklist
+ *
+ * This demonstrates:
+ * - Complex multi-step workflows that benefit from structured task planning
+ * - Task tracking across multiple agent turns
+ * - Long-running operations where progress visibility is important
+ * - Breaking down complex problems into manageable steps
+ */
 export async function todoListAgent(options: {
   message: string;
   apiKey: string;
@@ -79,35 +85,94 @@ export async function todoListAgent(options: {
 }) {
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
-    model: "claude-sonnet-4-5-20250929",
+    model: "claude-3-7-sonnet-latest",
     apiKey: options.apiKey,
   });
 
-  // Tool to search for flights
+  // Tool to check budget before making decisions
+  const checkBudget = tool(
+    async (input: { budget: number; estimatedCost?: number }) => {
+      if (input.estimatedCost && input.estimatedCost > input.budget) {
+        return {
+          warning: `Estimated cost ($${input.estimatedCost}) exceeds budget ($${input.budget}). Consider adjusting plans.`,
+          budget: input.budget,
+          estimatedCost: input.estimatedCost,
+          remaining: input.budget - input.estimatedCost,
+          withinBudget: false,
+        };
+      }
+      return {
+        budget: input.budget,
+        estimatedCost: input.estimatedCost || 0,
+        remaining: input.budget - (input.estimatedCost || 0),
+        withinBudget: true,
+        message: input.estimatedCost
+          ? `Budget check: $${input.estimatedCost} fits within $${input.budget} budget ($${input.budget - input.estimatedCost} remaining)`
+          : `Budget available: $${input.budget}`,
+      };
+    },
+    {
+      name: "check_budget",
+      description:
+        "Check if estimated costs fit within the user's budget. IMPORTANT: Use this BEFORE searching for flights/hotels to ensure you stay within budget. This helps avoid wasting searches on options that are too expensive.",
+      schema: z.object({
+        budget: z.number().describe("Total budget for the trip"),
+        estimatedCost: z.number().optional().describe("Estimated cost to check against budget"),
+      }),
+    }
+  );
+
+  // Tool to search for flights (prices increase with multiple searches - simulating urgency)
   const searchFlights = tool(
     async (input: { from: string; to: string; date: string }) => {
-      const flights = FLIGHTS.filter(
+      // Reset search state if searching different route (good planning)
+      if (searchState.lastSearchedCity !== `${input.from}-${input.to}`) {
+        searchState.flightSearches = 0;
+        searchState.lastSearchedCity = `${input.from}-${input.to}`;
+      }
+
+      searchState.flightSearches++;
+
+      // Price increases with each search (simulating urgency/demand)
+      const priceMultiplier = 1 + (searchState.flightSearches - 1) * 0.1; // 10% increase per search
+
+      const flights = FLIGHTS_BASE.filter(
         (f) =>
           f.from.toUpperCase() === input.from.toUpperCase() &&
           f.to.toUpperCase() === input.to.toUpperCase() &&
           f.date === input.date
-      );
+      ).map(f => ({
+        ...f,
+        price: Math.round(f.basePrice * priceMultiplier),
+      }));
+
       if (flights.length === 0) {
         return {
           error: `No flights found from ${input.from} to ${input.to} on ${input.date}`,
         };
       }
+
+      const warning = searchState.flightSearches > 1
+        ? `⚠️ Note: Prices have increased due to multiple searches. Better planning could have avoided this.`
+        : undefined;
+
       return {
         route: `${input.from} → ${input.to}`,
         date: input.date,
-        flights: flights.slice(0, 5), // Return top 5 options
+        flights: flights.slice(0, 5).map(({ basePrice, ...f }) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const _ = basePrice; // basePrice used internally but excluded from output
+          return f;
+        }),
         count: flights.length,
+        warning,
+        searchCount: searchState.flightSearches,
       };
     },
     {
       name: "search_flights",
       description:
-        "Search for available flights between two cities on a specific date. Returns flight options with prices, airlines, and durations.",
+        "Search for available flights between two cities on a specific date. Returns flight options with prices, airlines, and durations. IMPORTANT: Prices increase with each search, so plan carefully and check budget first.",
       schema: z.object({
         from: z.string().describe("Departure city code (e.g., NYC, LAX, SFO)"),
         to: z.string().describe("Arrival city code (e.g., NYC, LAX, SFO)"),
@@ -116,32 +181,67 @@ export async function todoListAgent(options: {
     }
   );
 
-  // Tool to search for hotels
+  // Tool to search for hotels (availability decreases with multiple searches)
   const searchHotels = tool(
-    async (input: { city: string; maxPrice?: number }) => {
-      const hotels = HOTELS.filter(
+    async (input: { city: string; maxPrice?: number; nights?: number }) => {
+      // Reset if searching different city (good planning)
+      if (searchState.lastSearchedCity !== input.city) {
+        searchState.hotelSearches = 0;
+        searchState.lastSearchedCity = input.city;
+      }
+
+      searchState.hotelSearches++;
+
+      // Availability decreases with each search (simulating bookings happening)
+      const availabilityReduction = Math.min(searchState.hotelSearches - 1, 2); // Max 2 rooms lost
+
+      const hotels = HOTELS_BASE.filter(
         (h) =>
           h.city.toUpperCase() === input.city.toUpperCase() &&
-          (!input.maxPrice || h.price <= input.maxPrice)
-      );
+          (!input.maxPrice || h.basePrice <= input.maxPrice)
+      ).map(h => {
+        const available = Math.max(0, h.availability - availabilityReduction);
+        return {
+          ...h,
+          price: h.basePrice,
+          availability: available,
+          available: available > 0,
+        };
+      }).filter(h => h.available); // Only show available hotels
+
       if (hotels.length === 0) {
         return {
-          error: `No hotels found in ${input.city}${input.maxPrice ? ` under $${input.maxPrice}` : ""}`,
+          error: `No hotels found in ${input.city}${input.maxPrice ? ` under $${input.maxPrice}` : ""}${availabilityReduction > 0 ? " (some may have been booked due to delayed search)" : ""}`,
         };
       }
+
+      const warning = searchState.hotelSearches > 1
+        ? `⚠️ Note: Some hotels have reduced availability due to delayed search. Better planning could have secured better options.`
+        : undefined;
+
       return {
         city: input.city,
-        hotels: hotels.slice(0, 5), // Return top 5 options
+        hotels: hotels.slice(0, 5).map(({ basePrice, availability: avail, ...h }) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const _ = basePrice; // basePrice used internally but excluded from output
+          return {
+            ...h,
+            availability: `${avail} rooms`,
+          };
+        }),
         count: hotels.length,
+        warning,
+        searchCount: searchState.hotelSearches,
       };
     },
     {
       name: "search_hotels",
       description:
-        "Search for available hotels in a city. Optionally filter by maximum price per night. Returns hotel options with prices, ratings, and amenities.",
+        "Search for available hotels in a city. Optionally filter by maximum price per night and number of nights. Returns hotel options with prices, ratings, amenities, and availability. IMPORTANT: Availability decreases with each search, so plan carefully and check budget first.",
       schema: z.object({
         city: z.string().describe("City code (e.g., LAX, SFO)"),
         maxPrice: z.number().optional().describe("Maximum price per night (optional)"),
+        nights: z.number().optional().describe("Number of nights (optional, helps calculate total cost)"),
       }),
     }
   );
@@ -203,6 +303,62 @@ export async function todoListAgent(options: {
     }
   );
 
+  // Tool to calculate total trip cost (requires all components)
+  const calculateTotalCost = tool(
+    async (input: {
+      flightCost?: number;
+      hotelCost?: number;
+      hotelNights?: number;
+      activityCost?: number;
+      otherCosts?: number;
+    }) => {
+      const flight = input.flightCost || 0;
+      const hotel = (input.hotelCost || 0) * (input.hotelNights || 0);
+      const activities = input.activityCost || 0;
+      const other = input.otherCosts || 0;
+      const total = flight + hotel + activities + other;
+
+      const breakdown = {
+        flights: flight,
+        hotel: hotel,
+        activities: activities,
+        other: other,
+        total: total,
+      };
+
+      const missing = [];
+      if (!input.flightCost) missing.push("flight cost");
+      if (!input.hotelCost || !input.hotelNights) missing.push("hotel cost");
+      if (input.activityCost === undefined) missing.push("activity costs");
+
+      if (missing.length > 0) {
+        return {
+          ...breakdown,
+          warning: `⚠️ Incomplete calculation. Missing: ${missing.join(", ")}. Make sure to gather all costs before calculating total.`,
+          complete: false,
+        };
+      }
+
+      return {
+        ...breakdown,
+        message: `Total trip cost: $${total} (Flights: $${flight}, Hotel: $${hotel}, Activities: $${activities}, Other: $${other})`,
+        complete: true,
+      };
+    },
+    {
+      name: "calculate_total_cost",
+      description:
+        "Calculate the total cost of the trip by combining flight costs, hotel costs (price × nights), activity costs, and other expenses. IMPORTANT: This requires information from previous steps - make sure you have flight prices, hotel prices, and number of nights before calling this.",
+      schema: z.object({
+        flightCost: z.number().optional().describe("Total cost of flights (round trip)"),
+        hotelCost: z.number().optional().describe("Price per night for hotel"),
+        hotelNights: z.number().optional().describe("Number of nights"),
+        activityCost: z.number().optional().describe("Estimated cost of activities"),
+        otherCosts: z.number().optional().describe("Other expenses (meals, transportation, etc.)"),
+      }),
+    }
+  );
+
   // Tool to create packing list
   const createPackingList = tool(
     async (input: { destination: string; duration: number; weather: string; activities: string[] }) => {
@@ -247,7 +403,7 @@ export async function todoListAgent(options: {
     {
       name: "create_packing_list",
       description:
-        "Create a personalized packing list based on destination, trip duration, weather forecast, and planned activities.",
+        "Create a personalized packing list based on destination, trip duration, weather forecast, and planned activities. IMPORTANT: Requires weather and activities information from previous steps.",
       schema: z.object({
         destination: z.string().describe("Travel destination city"),
         duration: z.number().describe("Number of days for the trip"),
@@ -261,10 +417,12 @@ export async function todoListAgent(options: {
   const agent = createAgent({
     model,
     tools: [
+      checkBudget,
       searchFlights,
       searchHotels,
       getActivities,
       getWeatherForecast,
+      calculateTotalCost,
       createPackingList,
     ],
     middleware: [todoListMiddleware()],
@@ -272,22 +430,35 @@ export async function todoListAgent(options: {
     systemPrompt: `You are an AI travel planning assistant that helps users plan their trips step by step.
 
 You have access to tools that allow you to:
-- Search for flights between cities
-- Search for hotels by city and price
+- Check budget before making decisions (IMPORTANT: Use this first!)
+- Search for flights between cities (prices increase with multiple searches)
+- Search for hotels by city and price (availability decreases with delayed searches)
 - Get recommendations for activities and attractions
 - Check weather forecasts
+- Calculate total trip cost (requires all components)
 - Create personalized packing lists
 
-When a user asks for help planning a trip, you should use the write_todos tool to break down the complex task into manageable steps. For example:
-1. Gather travel dates and destination preferences
-2. Search for flight options
-3. Search for hotel options
-4. Get activity recommendations
-5. Check weather forecast
-6. Create itinerary
-7. Prepare packing checklist
+CRITICAL PLANNING REQUIREMENTS:
+1. ALWAYS use write_todos to break down the complex task into manageable steps BEFORE starting
+2. ALWAYS check the user's budget FIRST using check_budget before searching for flights/hotels
+3. Gather ALL required information (dates, destination, budget, preferences) before making searches
+4. Plan the order carefully: Budget → Flights → Hotels → Activities → Weather → Cost Calculation → Packing List
+5. Avoid multiple searches for the same thing - prices increase and availability decreases with each search
+6. Calculate total cost only after gathering all component costs
 
-Work through each task systematically, gathering information step by step. Be thorough and provide complete, helpful travel planning advice. Adapt your plan as you gather new information from the user or from your tool calls.`,
+When a user asks for help planning a trip, you MUST use the write_todos tool to create a structured plan. Example plan:
+1. Gather travel dates, destination, and budget from user
+2. Check budget constraints
+3. Search for flight options (only once per route!)
+4. Search for hotel options (only once per city!)
+5. Get activity recommendations
+6. Check weather forecast for travel dates
+7. Calculate total trip cost
+8. Verify total cost fits within budget
+9. Create itinerary summary
+10. Prepare personalized packing checklist
+
+The key to success is PLANNING FIRST. Without proper planning, you'll waste searches, get higher prices, miss availability, and may exceed the budget. With planning, you'll get better results efficiently.`,
   });
 
   // Initialize the conversation
