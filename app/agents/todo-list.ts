@@ -436,29 +436,7 @@ You have access to tools that allow you to:
 - Get recommendations for activities and attractions
 - Check weather forecasts
 - Calculate total trip cost (requires all components)
-- Create personalized packing lists
-
-CRITICAL PLANNING REQUIREMENTS:
-1. ALWAYS use write_todos to break down the complex task into manageable steps BEFORE starting
-2. ALWAYS check the user's budget FIRST using check_budget before searching for flights/hotels
-3. Gather ALL required information (dates, destination, budget, preferences) before making searches
-4. Plan the order carefully: Budget → Flights → Hotels → Activities → Weather → Cost Calculation → Packing List
-5. Avoid multiple searches for the same thing - prices increase and availability decreases with each search
-6. Calculate total cost only after gathering all component costs
-
-When a user asks for help planning a trip, you MUST use the write_todos tool to create a structured plan. Example plan:
-1. Gather travel dates, destination, and budget from user
-2. Check budget constraints
-3. Search for flight options (only once per route!)
-4. Search for hotel options (only once per city!)
-5. Get activity recommendations
-6. Check weather forecast for travel dates
-7. Calculate total trip cost
-8. Verify total cost fits within budget
-9. Create itinerary summary
-10. Prepare personalized packing checklist
-
-The key to success is PLANNING FIRST. Without proper planning, you'll waste searches, get higher prices, miss availability, and may exceed the budget. With planning, you'll get better results efficiently.`,
+- Create personalized packing lists`,
   });
 
   // Initialize the conversation

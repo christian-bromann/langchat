@@ -5,6 +5,13 @@ interface ErrorBubbleProps {
 }
 
 export function ErrorBubble({ error }: ErrorBubbleProps) {
+  /**
+   * ignore unknown errors
+   */
+  if (error.includes("OOM command not allowed")) {
+    return
+  }
+
   return (
     <div className="flex justify-start mt-4">
       <div className="max-w-[80%] rounded-lg border-2 border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-900/20 p-4">
