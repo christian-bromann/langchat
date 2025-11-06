@@ -444,12 +444,11 @@ You have access to tools that allow you to:
     messages: [new HumanMessage(options.message)],
   };
 
-  const threadId = options.threadId || `thread-${Date.now()}`;
   const stream = await agent.stream(initialState, {
     encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50,
-    configurable: { thread_id: threadId },
+    configurable: { thread_id: options.threadId },
   });
 
   return new Response(stream, {
