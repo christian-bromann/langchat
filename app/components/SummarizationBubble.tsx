@@ -64,38 +64,69 @@ export const SummarizationBubble = ({ summary }: { summary: SummarizationEvent }
 
 export function parseSummarizationEvent(data: UpdateData, currentMessageCount: number, onSummarization: (summary: SummarizationEvent) => void): void {
   if (data && typeof data === "object" && "SummarizationMiddleware.before_model" in data) {
-    const summarizationData = (data as Record<string, unknown>)["SummarizationMiddleware.before_model"];
-    if (summarizationData && typeof summarizationData === "object" && "messages" in summarizationData) {
-      const messages = (summarizationData as { messages: unknown[] }).messages;
-      // Find the SystemMessage with the summary
-      for (const msg of messages) {
-        if (
-          msg &&
-          typeof msg === "object" &&
-          "id" in msg &&
-          Array.isArray(msg.id) &&
-          msg.id[2] === "SystemMessage" &&
-          "kwargs" in msg &&
-          typeof msg.kwargs === "object" &&
-          msg.kwargs !== null &&
-          "content" in msg.kwargs
-        ) {
-          const content = msg.kwargs.content as string;
-          // Extract summary content (remove the prefix)
-          if (content.includes("## Previous conversation summary:")) {
-            const summary = content.replace("## Previous conversation summary:\n", "").trim();
-            onSummarization({
-              id: `summarization-${Date.now()}`,
-              timestamp: Date.now(),
-              summary: summary,
-              afterMessageIndex: Math.max(0, currentMessageCount - 1), // After the last message
-            });
-            break;
+    const summarizationData = (data as unknown as Record<string, unknown>)["SummarizationMiddleware.before_model"];
+    if (!summarizationData || typeof summarizationData !== "object" || !("messages" in summarizationData)) {
+      return;
+    }
+
+    const messages = (summarizationData as { messages: unknown[] }).messages;
+    if (!Array.isArray(messages)) {
+      return;
+    }
+
+    // Find the message with the summary (LangGraph native format)
+    for (const msg of messages) {
+      if (!msg || typeof msg !== "object") {
+        continue;
+      }
+
+      const msgAny = msg as Record<string, unknown>;
+      if (!("type" in msgAny) || !("content" in msgAny)) {
+        continue;
+      }
+
+      let content: string | undefined;
+
+      // Handle string content
+      if (typeof msgAny.content === "string") {
+        content = msgAny.content;
+      }
+      // Handle array content (extract text from content blocks)
+      else if (Array.isArray(msgAny.content)) {
+        const textParts: string[] = [];
+        for (const item of msgAny.content) {
+          if (!item) {
+            continue;
+          }
+
+          if (typeof item === "object") {
+            // Handle text content blocks: {type: "text", text: "..."}
+            if ("type" in item && item.type === "text" && "text" in item && typeof item.text === "string") {
+              textParts.push(item.text);
+            }
+          } else if (typeof item === "string") {
+            // Handle direct string content in array
+            textParts.push(item);
           }
         }
+        if (textParts.length > 0) {
+          content = textParts.join("");
+        }
       }
+
+      if (!content || !content.includes("## Previous conversation summary:")) {
+        continue;
+      }
+
+      // Extract summary content
+      const summary = content.replace("## Previous conversation summary:\n", "").trim();
+      onSummarization({
+        id: `summarization-${Date.now()}`,
+        timestamp: Date.now(),
+        summary: summary,
+        afterMessageIndex: Math.max(0, currentMessageCount - 1), // After the last message
+      });
+      break;
     }
-    // Continue processing other messages in the update
-    return;
   }
 }
