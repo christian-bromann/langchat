@@ -35,6 +35,9 @@ const SCENARIO_PROMPTS = {
     "Hi, I need to check my account balance. My SSN is 987-65-4321.",
     "I'd like to make a payment of $150. My email is michael.chen@email.com and my credit card is 4532-9876-5432-1098."
   ],
+  "mcp": [
+    "Explore the available MCP servers and show me what tools are available. Then create a simple text file with some data, store a key-value pair in memory, and create a SQLite table to track it."
+  ],
 } as const;
 
 interface WelcomeScreenProps {
