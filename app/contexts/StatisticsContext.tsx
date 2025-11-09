@@ -1,6 +1,61 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { BaseMessage } from "@langchain/core/messages";
+
+/**
+ * Default token counter that approximates based on character count
+ * Handles both BaseMessage format and model_request message format
+ * @param messages Messages to count tokens for (can be BaseMessage[] or model_request message format)
+ * @returns Approximate token count
+ */
+export function countTokensApproximately(messages: BaseMessage[] | Array<Record<string, unknown>>): number {
+  let totalChars = 0;
+  for (const msg of messages) {
+    let textContent: string = "";
+
+    // Handle BaseMessage format and LangGraph native format (has content property directly)
+    if ("content" in msg) {
+      const content = (msg as Record<string, unknown>).content;
+      if (typeof content === "string") {
+        textContent = content;
+      } else if (Array.isArray(content)) {
+        textContent = content
+          .map((item) => {
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object" && "type" in item && item.type === "text" && "text" in item) {
+              return (item as { text: string }).text;
+            }
+            return "";
+          })
+          .join("");
+      }
+    }
+
+    // Handle old format (has kwargs.content)
+    if (!textContent && "kwargs" in msg && msg.kwargs && typeof msg.kwargs === "object") {
+      const kwargs = msg.kwargs as Record<string, unknown>;
+      const content = kwargs.content;
+      if (typeof content === "string") {
+        textContent = content;
+      } else if (Array.isArray(content)) {
+        textContent = content
+          .map((item) => {
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object" && "type" in item && item.type === "text" && "text" in item) {
+              return (item as { text: string }).text;
+            }
+            return "";
+          })
+          .join("");
+      }
+    }
+
+    totalChars += textContent.length;
+  }
+  // Approximate 1 token = 4 characters
+  return Math.ceil(totalChars / 4);
+}
 
 export interface Statistics {
   toolCalls: Map<string, number>; // tool name -> count
@@ -10,6 +65,7 @@ export interface Statistics {
     output: number;
     total: number;
   };
+  contextWindowSize: number; // Maximum context window size seen
 }
 
 interface StatisticsContextType {
@@ -17,6 +73,7 @@ interface StatisticsContextType {
   recordToolCall: (toolName: string) => void;
   recordModelCall: () => void;
   recordTokens: (input: number, output: number, total: number) => void;
+  recordContextWindowSize: (size: number) => void;
   resetStatistics: () => void;
 }
 
@@ -31,6 +88,7 @@ export function StatisticsProvider({ children }: { children: ReactNode }) {
       output: 0,
       total: 0,
     },
+    contextWindowSize: 0,
   });
 
   const recordToolCall = useCallback((toolName: string) => {
@@ -63,6 +121,13 @@ export function StatisticsProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const recordContextWindowSize = useCallback((size: number) => {
+    setStatistics((prev) => ({
+      ...prev,
+      contextWindowSize: Math.max(prev.contextWindowSize, size),
+    }));
+  }, []);
+
   const resetStatistics = useCallback(() => {
     setStatistics({
       toolCalls: new Map(),
@@ -72,6 +137,7 @@ export function StatisticsProvider({ children }: { children: ReactNode }) {
         output: 0,
         total: 0,
       },
+      contextWindowSize: 0,
     });
   }, []);
 
@@ -82,6 +148,7 @@ export function StatisticsProvider({ children }: { children: ReactNode }) {
         recordToolCall,
         recordModelCall,
         recordTokens,
+        recordContextWindowSize,
         resetStatistics,
       }}
     >

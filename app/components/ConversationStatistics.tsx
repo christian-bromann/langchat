@@ -93,6 +93,16 @@ export function ConversationStatistics() {
             </div>
           </div>
         )}
+
+        {/* Context Window Size */}
+        {statistics.contextWindowSize > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600 dark:text-gray-400">Context Window Size</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {statistics.contextWindowSize.toLocaleString()}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

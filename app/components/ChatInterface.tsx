@@ -12,7 +12,7 @@ import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
 import { ErrorBubble } from "./ErrorBubble";
-import { useStatistics } from "@/app/contexts/StatisticsContext";
+import { useStatistics, countTokensApproximately } from "@/app/contexts/StatisticsContext";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
@@ -62,6 +62,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "model-call-limits": "/api/model-call-limits",
   "tool-call-limits": "/api/tool-call-limits",
   "todo-list": "/api/todo-list",
+  "mcp": "/api/mcp",
 } as const;
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
@@ -79,7 +80,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const messageCountRef = useRef<number>(0);
   const processedTokenMessagesRef = useRef<Set<string>>(new Set());
   const processedToolCallIdsRef = useRef<Set<string>>(new Set());
-  const { recordToolCall, recordModelCall, recordTokens, resetStatistics } = useStatistics();
+  const { recordToolCall, recordModelCall, recordTokens, recordContextWindowSize, resetStatistics } = useStatistics();
 
   // Reset state when scenario changes
   useEffect(() => {
@@ -383,12 +384,26 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
             updateToolCallWithMessage(toolMsg);
           }
         },
+        agent_state: (data: AgentStateEventData) => {
+          // Track context window size from agent_state events (which come from values events)
+          const messages = data.messages || [];
+          if (messages.length > 0) {
+            const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
+            recordContextWindowSize(contextWindowTokens);
+          }
+        },
         model_request: (data: ModelRequestEventData) => {
           updateToolCallArgs(data);
           recordModelCall();
 
           // Track token usage and tool calls from model_request events (these contain final, accurate counts)
           const messages = data.model_request?.messages || [];
+
+          // Count tokens in the messages array to track context window size
+          if (messages.length > 0) {
+            const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
+            recordContextWindowSize(contextWindowTokens);
+          }
 
           for (const message of messages) {
             // Track tokens - handle both LangGraph native format (usage_metadata directly) and transformed format (kwargs.usage_metadata)
@@ -528,7 +543,18 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         });
       }
     }
-  }, [inputValue, selectedScenario, isLoading, apiKey, currentThreadId, recordToolCall, recordModelCall, recordTokens, updateToolCallArgs]);
+  }, [
+    inputValue,
+    selectedScenario,
+    isLoading,
+    apiKey,
+    currentThreadId,
+    recordToolCall,
+    recordModelCall,
+    recordTokens,
+    updateToolCallArgs,
+    recordContextWindowSize
+  ]);
 
   const handleInterruptApprove = useCallback(async () => {
     if (!interruptData) return;
