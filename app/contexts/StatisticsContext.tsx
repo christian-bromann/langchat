@@ -9,33 +9,14 @@ import { BaseMessage } from "@langchain/core/messages";
  * @param messages Messages to count tokens for (can be BaseMessage[] or model_request message format)
  * @returns Approximate token count
  */
-export function countTokensApproximately(messages: BaseMessage[] | Array<Record<string, unknown>>): number {
+export function countTokensApproximately(messages: BaseMessage[]): number {
   let totalChars = 0;
   for (const msg of messages) {
     let textContent: string = "";
 
     // Handle BaseMessage format and LangGraph native format (has content property directly)
     if ("content" in msg) {
-      const content = (msg as Record<string, unknown>).content;
-      if (typeof content === "string") {
-        textContent = content;
-      } else if (Array.isArray(content)) {
-        textContent = content
-          .map((item) => {
-            if (typeof item === "string") return item;
-            if (item && typeof item === "object" && "type" in item && item.type === "text" && "text" in item) {
-              return (item as { text: string }).text;
-            }
-            return "";
-          })
-          .join("");
-      }
-    }
-
-    // Handle old format (has kwargs.content)
-    if (!textContent && "kwargs" in msg && msg.kwargs && typeof msg.kwargs === "object") {
-      const kwargs = msg.kwargs as Record<string, unknown>;
-      const content = kwargs.content;
+      const content = msg.content;
       if (typeof content === "string") {
         textContent = content;
       } else if (Array.isArray(content)) {
