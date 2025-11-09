@@ -19,6 +19,9 @@ const SCENARIO_PROMPTS = {
   "todo-list": [
     "Plan a 5-day trip to Los Angeles from NYC, leaving March 15th and returning March 22nd. My budget is $1200. Include flight options, hotel recommendations, activities, total cost breakdown, and a packing list."
   ],
+  "mcp": [
+    "Explore the available MCP servers and show me what tools are available. Then create a simple text file with some data, store a key-value pair in memory, and create a SQLite table to track it."
+  ],
 } as const;
 
 interface WelcomeScreenProps {
