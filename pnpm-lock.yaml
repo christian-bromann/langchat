@@ -10,19 +10,19 @@ importers:
     dependencies:
       '@langchain/anthropic':
         specifier: ^1.0.0
-        version: 1.0.0(@langchain/core@1.0.3)(zod@4.1.12)
+        version: 1.0.0(@langchain/core@1.0.4)(zod@4.1.12)
       '@langchain/core':
-        specifier: ^1.0.3
-        version: 1.0.3
+        specifier: ^1.0.4
+        version: 1.0.4
       '@langchain/langgraph':
         specifier: ^1.0.1
-        version: 1.0.1(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)
+        version: 1.0.1(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)
       '@langchain/langgraph-checkpoint-redis':
         specifier: ^1.0.0
-        version: 1.0.0(@langchain/core@1.0.3)(@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.3))
+        version: 1.0.0(@langchain/core@1.0.4)(@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.4))
       langchain:
-        specifier: ^1.0.3
-        version: 1.0.3(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        specifier: ^1.0.4
+        version: 1.0.4(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       next:
         specifier: 16.0.1
         version: 16.0.1(@babel/core@7.28.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -555,8 +555,8 @@ packages:
     peerDependencies:
       '@langchain/core': ^1.0.0
 
-  '@langchain/core@1.0.3':
-    resolution: {integrity: sha512-3ABwsHfpvsDzNWZYAgPist5q+qjiU7lZDzEk7A9rXVhdhksPH8aFWnwFD6JhNP4wCgVqHWxvBaC1pj2gMa7iTg==}
+  '@langchain/core@1.0.4':
+    resolution: {integrity: sha512-zrTM4sVls18KfR6h/R7ErJUY4eeZa3Mr9s+Y6upXc2MevlYo7jfZZabs4Kv/R9fTdRFEJPwSsY1HTw5pokPrLg==}
     engines: {node: '>=20'}
 
   '@langchain/langgraph-checkpoint-redis@1.0.0':
@@ -1964,8 +1964,8 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  langchain@1.0.3:
-    resolution: {integrity: sha512-nGxI9li1yttHzLHtECgw3hGMNzEDQR+EpW4kHKy1mbWjyBXtUDI6SyHjAeOAX7c6oV1QYRlFsOlXtahPiMySpQ==}
+  langchain@1.0.4:
+    resolution: {integrity: sha512-g7z2kKvnXOecybbVGHfI2ZmdmP309mxC1FYlq6WC/7RsKgX5MwY9gBjwK16mpKOaozOD9QCo1Ia7o2UcUBRb9Q==}
     engines: {node: '>=20'}
     peerDependencies:
       '@langchain/core': ^1.0.3
@@ -3217,14 +3217,14 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@langchain/anthropic@1.0.0(@langchain/core@1.0.3)(zod@4.1.12)':
+  '@langchain/anthropic@1.0.0(@langchain/core@1.0.4)(zod@4.1.12)':
     dependencies:
       '@anthropic-ai/sdk': 0.65.0(zod@4.1.12)
-      '@langchain/core': 1.0.3
+      '@langchain/core': 1.0.4
     transitivePeerDependencies:
       - zod
 
-  '@langchain/core@1.0.3':
+  '@langchain/core@1.0.4':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       ansi-styles: 5.2.0
@@ -3243,10 +3243,10 @@ snapshots:
       - '@opentelemetry/sdk-trace-base'
       - openai
 
-  '@langchain/langgraph-checkpoint-redis@1.0.0(@langchain/core@1.0.3)(@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.3))':
+  '@langchain/langgraph-checkpoint-redis@1.0.0(@langchain/core@1.0.4)(@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.4))':
     dependencies:
-      '@langchain/core': 1.0.3
-      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.0.3)
+      '@langchain/core': 1.0.4
+      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.0.4)
       redis: 4.7.1
       testcontainers: 10.28.0
       ulid: 2.4.0
@@ -3256,26 +3256,26 @@ snapshots:
       - react-native-b4a
       - supports-color
 
-  '@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.3)':
+  '@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.4)':
     dependencies:
-      '@langchain/core': 1.0.3
+      '@langchain/core': 1.0.4
       uuid: 10.0.0
 
-  '@langchain/langgraph-sdk@1.0.0(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+  '@langchain/langgraph-sdk@1.0.0(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
     dependencies:
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 9.0.1
     optionalDependencies:
-      '@langchain/core': 1.0.3
+      '@langchain/core': 1.0.4
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
 
-  '@langchain/langgraph@1.0.1(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)':
+  '@langchain/langgraph@1.0.1(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)':
     dependencies:
-      '@langchain/core': 1.0.3
-      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.0.3)
-      '@langchain/langgraph-sdk': 1.0.0(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@langchain/core': 1.0.4
+      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.0.4)
+      '@langchain/langgraph-sdk': 1.0.0(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       uuid: 10.0.0
       zod: 4.1.12
     transitivePeerDependencies:
@@ -4812,11 +4812,11 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  langchain@1.0.3(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  langchain@1.0.4(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
-      '@langchain/core': 1.0.3
-      '@langchain/langgraph': 1.0.1(@langchain/core@1.0.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)
-      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.0.3)
+      '@langchain/core': 1.0.4
+      '@langchain/langgraph': 1.0.1(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)
+      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.0.4)
       langsmith: 0.3.76
       uuid: 10.0.0
       zod: 4.1.12

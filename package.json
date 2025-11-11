@@ -22,10 +22,10 @@
   },
   "dependencies": {
     "@langchain/anthropic": "^1.0.0",
-    "@langchain/core": "^1.0.3",
+    "@langchain/core": "^1.0.4",
     "@langchain/langgraph": "^1.0.1",
     "@langchain/langgraph-checkpoint-redis": "^1.0.0",
-    "langchain": "^1.0.3",
+    "langchain": "^1.0.4",
     "next": "16.0.1",
     "next-themes": "^0.4.6",
     "react": "19.2.0",
