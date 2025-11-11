@@ -2,16 +2,15 @@
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { BaseMessage } from "@langchain/core/messages";
-import { countTokens } from "@anthropic-ai/tokenizer";
 
 /**
- * Token counter using Anthropic's tokenizer
+ * Default token counter that approximates based on character count
  * Handles both BaseMessage format and model_request message format
  * @param messages Messages to count tokens for (can be BaseMessage[] or model_request message format)
- * @returns Token count
+ * @returns Approximate token count
  */
 export function countTokensApproximately(messages: BaseMessage[] | Array<Record<string, unknown>>): number {
-  let totalTokens = 0;
+  let totalChars = 0;
   for (const msg of messages) {
     let textContent: string = "";
 
@@ -33,11 +32,10 @@ export function countTokensApproximately(messages: BaseMessage[] | Array<Record<
       }
     }
 
-    if (textContent) {
-      totalTokens += countTokens(textContent);
-    }
+    totalChars += textContent.length;
   }
-  return totalTokens;
+  // Approximate 1 token = 4 characters
+  return Math.ceil(totalChars / 4);
 }
 
 export interface Statistics {
@@ -104,10 +102,10 @@ export function StatisticsProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const recordContextWindowSize = useCallback((size: number) => {
+  const recordContextWindowSize = useCallback((contextWindowSize: number) => {
     setStatistics((prev) => ({
       ...prev,
-      contextWindowSize: Math.max(prev.contextWindowSize, size),
+      contextWindowSize,
     }));
   }, []);
 

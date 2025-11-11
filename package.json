@@ -21,7 +21,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@anthropic-ai/tokenizer": "^0.0.4",
     "@langchain/anthropic": "^1.0.0",
     "@langchain/core": "^1.0.3",
     "@langchain/langgraph": "^1.0.1",

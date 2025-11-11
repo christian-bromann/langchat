@@ -19,6 +19,9 @@ const SCENARIO_PROMPTS = {
   "todo-list": [
     "Plan a 5-day trip to Los Angeles from NYC, leaving March 15th and returning March 22nd. My budget is $1200. Include flight options, hotel recommendations, activities, total cost breakdown, and a packing list."
   ],
+  "context-editing": [
+    "I'm researching transformer architectures and context management. Can you search for papers on these topics, get detailed information about context editing, compare transformer architecture with RAG, and analyze research trends? Make multiple searches to gather comprehensive information."
+  ],
 } as const;
 
 interface WelcomeScreenProps {

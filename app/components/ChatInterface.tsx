@@ -62,6 +62,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "model-call-limits": "/api/model-call-limits",
   "tool-call-limits": "/api/tool-call-limits",
   "todo-list": "/api/todo-list",
+  "context-editing": "/api/context-editing",
   "mcp": "/api/mcp",
 } as const;
 
@@ -389,6 +390,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           const messages = data.messages || [];
           if (messages.length > 0) {
             const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
+            console.log("UPDATE WINDOW", contextWindowTokens)
             recordContextWindowSize(contextWindowTokens);
           }
         },
@@ -402,6 +404,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           // Count tokens in the messages array to track context window size
           if (messages.length > 0) {
             const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
+            console.log("UPDATE WINDOW", contextWindowTokens)
             recordContextWindowSize(contextWindowTokens);
           }
 
