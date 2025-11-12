@@ -22,6 +22,10 @@ const SCENARIO_PROMPTS = {
   "context-editing": [
     "I'm researching transformer architectures and context management. Can you search for papers on these topics, get detailed information about context editing, compare transformer architecture with RAG, and analyze research trends? Make multiple searches to gather comprehensive information."
   ],
+  "pii-redaction": [
+    "Hi, I need to check my account balance. My SSN is 987-65-4321.",
+    "I'd like to make a payment of $150. My email is michael.chen@email.com and my credit card is 4532-9876-5432-1098."
+  ],
 } as const;
 
 interface WelcomeScreenProps {
