@@ -81,6 +81,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const messageCountRef = useRef<number>(0);
   const processedTokenMessagesRef = useRef<Set<string>>(new Set());
   const processedToolCallIdsRef = useRef<Set<string>>(new Set());
+  const summarizationContentRef = useRef<string>(""); // Track accumulating summarization content
+  const currentSummarizationIdRef = useRef<string | null>(null); // Track current summarization ID
   const { recordToolCall, recordModelCall, recordTokens, recordContextWindowSize, resetStatistics } = useStatistics();
 
   // Reset state when scenario changes
@@ -96,6 +98,8 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     accumulatedContentRef.current = "";
     processedTokenMessagesRef.current = new Set();
     processedToolCallIdsRef.current = new Set();
+    summarizationContentRef.current = "";
+    currentSummarizationIdRef.current = null;
     resetStatistics();
   }, [selectedScenario, resetStatistics]);
 
@@ -259,19 +263,32 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       // Helper function to process update events (streaming AIMessageChunk data or ToolMessage data)
       const processUpdate = (data: UpdateData) => {
         /**
-         * Parse the summarization event from the update data
+         * Parse the summarization event from the update data (for updates event)
+         * Only parse if we're not already streaming a summarization (to avoid duplicates)
          */
-        parseSummarizationEvent(data, messageCountRef.current, (summary) => {
-          setSummarizations((prev) => [
-            ...prev,
-            summary,
-          ]);
-        });
+        if (!currentSummarizationIdRef.current) {
+          parseSummarizationEvent(data, messageCountRef.current, (summary) => {
+            setSummarizations((prev) => [
+              ...prev,
+              summary,
+            ]);
+          });
+        }
 
         // Check if this is an array update (either [AIMessageChunk, LangGraphMetadata] or [ToolMessage, LangGraphMetadata])
         if (!Array.isArray(data) || data.length !== 2) {
           return;
         }
+
+        // Check metadata for summarization middleware
+        const metadata = data[1] as unknown as Record<string, unknown>;
+        const isSummarizationMessage =
+          metadata &&
+          typeof metadata === "object" &&
+          (("langgraph_node" in metadata && metadata.langgraph_node === "SummarizationMiddleware.before_model") ||
+           ("langgraph_triggers" in metadata &&
+            Array.isArray(metadata.langgraph_triggers) &&
+            metadata.langgraph_triggers.includes("branch:to:SummarizationMiddleware.before_model")));
 
         // Handle ToolMessage updates
         if (isToolMessage(data[0])) {
@@ -289,6 +306,73 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         // Handle both LangGraph native format (id as string) and old format (kwargs.id)
         const msgId = typeof msg.id === "string" ? msg.id : (msg.kwargs as Record<string, unknown>)?.id as string | undefined;
         const messageId = msgId || currentAssistantId;
+
+        // If this is a summarization message, stream it to the summarization bubble instead
+        if (isSummarizationMessage) {
+          // Extract text content from the chunk
+          const chunkText = extractIncrementalTextFromChunk(msg);
+
+          if (chunkText !== null && chunkText !== "") {
+            // Initialize summarization if this is the first chunk
+            if (!currentSummarizationIdRef.current) {
+              const summarizationId = `summarization-${Date.now()}`;
+              currentSummarizationIdRef.current = summarizationId;
+              summarizationContentRef.current = "";
+
+              // Create initial summarization event
+              setSummarizations((prev) => [
+                ...prev,
+                {
+                  id: summarizationId,
+                  timestamp: Date.now(),
+                  summary: "",
+                  afterMessageIndex: Math.max(0, messageCountRef.current - 1),
+                  isStreaming: true,
+                },
+              ]);
+            }
+
+            // Accumulate content
+            const currentAccumulated = summarizationContentRef.current;
+            let updatedContent: string;
+
+            if (!currentAccumulated) {
+              updatedContent = chunkText;
+            } else if (chunkText.startsWith(currentAccumulated) && chunkText.length > currentAccumulated.length) {
+              // Full replacement: chunk contains accumulated + new text
+              updatedContent = chunkText;
+            } else if (chunkText === currentAccumulated) {
+              // Duplicate chunk, skip
+              return;
+            } else {
+              // Incremental chunk: append new text to accumulated
+              updatedContent = currentAccumulated + chunkText;
+            }
+
+            // Only update if content actually changed
+            if (updatedContent !== currentAccumulated) {
+              // Remove the prefix if present
+              let displayContent = updatedContent;
+              if (displayContent.startsWith("Here is a summary of the conversation to date:")) {
+                displayContent = displayContent.replace(/^Here is a summary of the conversation to date:\s*/i, "").trim();
+              }
+
+              summarizationContentRef.current = updatedContent;
+
+              // Update the summarization bubble with streaming content
+              setSummarizations((prev) =>
+                prev.map((s) =>
+                  s.id === currentSummarizationIdRef.current
+                    ? { ...s, summary: displayContent, isStreaming: true }
+                    : s
+                )
+              );
+            }
+          }
+
+          // Don't process summarization messages as regular AI messages
+          return;
+        }
 
         // Check if this is a new AI message (different ID)
         if (msgId && msgId !== currentAssistantId) {
@@ -390,7 +474,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           const messages = data.messages || [];
           if (messages.length > 0) {
             const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
-            console.log("UPDATE WINDOW", contextWindowTokens)
             recordContextWindowSize(contextWindowTokens);
           }
         },
@@ -404,7 +487,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           // Count tokens in the messages array to track context window size
           if (messages.length > 0) {
             const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
-            console.log("UPDATE WINDOW", contextWindowTokens)
             recordContextWindowSize(contextWindowTokens);
           }
 
@@ -461,6 +543,19 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
               return msg;
             })
           );
+
+          // Mark summarization as complete (no longer streaming)
+          if (currentSummarizationIdRef.current) {
+            setSummarizations((prev) =>
+              prev.map((s) =>
+                s.id === currentSummarizationIdRef.current
+                  ? { ...s, isStreaming: false }
+                  : s
+              )
+            );
+            currentSummarizationIdRef.current = null;
+            summarizationContentRef.current = "";
+          }
         },
         error: (error: Error) => {
           setIsLoading(false);

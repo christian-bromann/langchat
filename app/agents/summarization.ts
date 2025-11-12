@@ -289,8 +289,17 @@ export async function summarizationAgent(options: {
     middleware: [
       summarizationMiddleware({
         model: summaryModel,
-        maxTokensBeforeSummary: 2000, // Trigger summarization at 4000 tokens
-        messagesToKeep: 20, // Keep last 20 messages after summary
+        /**
+         * trigger summarization when the conversation history is
+         */
+        trigger: [
+          { fraction: 0.8 }, // 80% of the model's context size
+          { tokens: 2000 },  // or 2000 tokens
+        ],
+        /**
+         * Keep last 1000 tokens after summary
+         */
+        keep: { tokens: 1000 },
         summaryPrefix: "## Previous conversation summary:",
       }),
     ],
