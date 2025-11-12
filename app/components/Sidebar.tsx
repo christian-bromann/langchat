@@ -17,7 +17,6 @@ const scenarios: AgentScenario[] = [
   { id: "tool-call-limits", name: "Tool Call Limits" },
   { id: "todo-list", name: "Todo List" },
   { id: "context-editing", name: "Context Editing" },
-  { id: "mcp", name: "MCP Servers" },
 ];
 
 interface SidebarProps {
