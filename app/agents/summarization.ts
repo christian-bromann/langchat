@@ -266,19 +266,15 @@ export async function summarizationAgent(options: {
   threadId?: string;
   model?: string;
 }) {
-  const modelName = options.model ?? "claude-3-7-sonnet-latest";
-  // Use a cheaper model for summarization (default to haiku if no model specified)
-  const summaryModelName = "claude-3-haiku-20240307";
-
   // Create the main Anthropic model instance
   const model = new ChatAnthropic({
-    model: modelName,
+    model: "claude-sonnet-4-5",
     apiKey: options.apiKey,
   });
 
-  // Create a separate model for summarization (cheaper model)
+  // Use a cheaper model for summarization
   const summaryModel = new ChatAnthropic({
-    model: summaryModelName,
+    model: "claude-haiku-4-5",
     apiKey: options.apiKey,
   });
 
@@ -307,9 +303,7 @@ export async function summarizationAgent(options: {
     systemPrompt: "You are a helpful coding assistant that helps developers refactor and improve their TypeScript/JavaScript projects. You can read files and explore project structures to understand codebases. Provide thoughtful, detailed code reviews and refactoring suggestions.",
   });
 
-  // Get or create thread ID
-  const threadId = options.threadId || `thread-${Date.now()}`;
-  const config = { configurable: { thread_id: threadId } };
+  const config = { configurable: { thread_id: options.threadId } };
 
   // Check if this is a new thread by trying to get existing checkpoint state
   let isNewThread = false;
@@ -342,7 +336,7 @@ export async function summarizationAgent(options: {
     encoding: "text/event-stream",
     ...config,
     streamMode: ["values", "updates", "messages"],
-    recursionLimit: 10,
+    recursionLimit: 50,
   });
 
   return new Response(stream, {
