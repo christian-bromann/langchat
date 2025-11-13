@@ -15,6 +15,7 @@ const scenarios: AgentScenario[] = [
   { id: "summarization", name: "Summarization" },
   { id: "model-call-limits", name: "Model Call Limits" },
   { id: "tool-call-limits", name: "Tool Call Limits" },
+  { id: "tool-retry", name: "Tool Retry" },
   { id: "todo-list", name: "Todo List" },
   { id: "context-editing", name: "Context Editing" },
   { id: "pii-redaction", name: "PII Redaction" },
