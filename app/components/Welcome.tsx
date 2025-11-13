@@ -19,6 +19,9 @@ const SCENARIO_PROMPTS = {
   "tool-retry": [
     "What's the weather like in New York and San Francisco?"
   ],
+  "model-fallback": [
+    "I'm looking for a laptop. Can you help me find one and tell me about its features?"
+  ],
   "todo-list": [
     "Plan a 5-day trip to Los Angeles from NYC, leaving March 15th and returning March 22nd. My budget is $1200. Include flight options, hotel recommendations, activities, total cost breakdown, and a packing list."
   ],

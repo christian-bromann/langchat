@@ -62,6 +62,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "model-call-limits": "/api/model-call-limits",
   "tool-call-limits": "/api/tool-call-limits",
   "tool-retry": "/api/tool-retry",
+  "model-fallback": "/api/model-fallback",
   "todo-list": "/api/todo-list",
   "context-editing": "/api/context-editing",
   "pii-redaction": "/api/pii-redaction",
@@ -77,6 +78,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(undefined);
   const [summarizations, setSummarizations] = useState<SummarizationEvent[]>([]);
   const [errors, setErrors] = useState<Map<string, string>>(new Map()); // Map of AI message ID to error message
+  const [modelNames, setModelNames] = useState<Map<string, string>>(new Map()); // Map of AI message ID to model name
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const accumulatedContentRef = useRef<string>("");
@@ -96,6 +98,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setInputValue("");
     setSummarizations([]);
     setErrors(new Map());
+    setModelNames(new Map());
     messageCountRef.current = 0;
     accumulatedContentRef.current = "";
     processedTokenMessagesRef.current = new Set();
@@ -308,6 +311,18 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         // Handle both LangGraph native format (id as string) and old format (kwargs.id)
         const msgId = typeof msg.id === "string" ? msg.id : (msg.kwargs as Record<string, unknown>)?.id as string | undefined;
         const messageId = msgId || currentAssistantId;
+
+        // Extract model name from metadata for model-fallback scenario
+        if (selectedScenario === "model-fallback" && metadata && typeof metadata === "object") {
+          const modelName = (metadata as Record<string, unknown>).ls_model_name as string | undefined;
+          if (modelName && messageId) {
+            setModelNames((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(messageId, modelName);
+              return newMap;
+            });
+          }
+        }
 
         // If this is a summarization message, stream it to the summarization bubble instead
         if (isSummarizationMessage) {
@@ -776,6 +791,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                 : [];
 
               const errorMessage = message.id ? errors.get(message.id) : undefined;
+              const modelName = selectedScenario === "model-fallback" && message.id ? modelNames.get(message.id) : undefined;
 
               return (
                 <div key={message.id || messageIndex}>
@@ -792,6 +808,13 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                           : "bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       }`}
                     >
+                      {modelName && AIMessage.isInstance(message) && (
+                        <div className="mb-2">
+                          <span className="inline-block px-2 py-1 text-xs font-medium rounded bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                            {modelName}
+                          </span>
+                        </div>
+                      )}
                       <p className="whitespace-pre-wrap">
                         {message.content as string}
                         {messageIndex === messages.length - 1 && isLoading && (
