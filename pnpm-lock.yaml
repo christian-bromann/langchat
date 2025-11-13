@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  langchain: file:../langchainjs/libs/langchain
-
 importers:
 
   .:
@@ -24,8 +21,8 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0(@langchain/core@1.0.4)(@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.4))
       langchain:
-        specifier: file:../langchainjs/libs/langchain
-        version: file:../langchainjs/libs/langchain(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        specifier: ^1.0.4
+        version: 1.0.4(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       next:
         specifier: 16.0.1
         version: 16.0.1(@babel/core@7.28.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -1974,8 +1971,8 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  langchain@file:../langchainjs/libs/langchain:
-    resolution: {directory: ../langchainjs/libs/langchain, type: directory}
+  langchain@1.0.4:
+    resolution: {integrity: sha512-g7z2kKvnXOecybbVGHfI2ZmdmP309mxC1FYlq6WC/7RsKgX5MwY9gBjwK16mpKOaozOD9QCo1Ia7o2UcUBRb9Q==}
     engines: {node: '>=20'}
     peerDependencies:
       '@langchain/core': ^1.0.3
@@ -4826,7 +4823,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  langchain@file:../langchainjs/libs/langchain(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  langchain@1.0.4(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       '@langchain/core': 1.0.4
       '@langchain/langgraph': 1.0.2(@langchain/core@1.0.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@4.1.12)
