@@ -1,11 +1,15 @@
 import { NextRequest } from "next/server";
-import { contextEditingAgent } from "@/app/agents/context-editing";
+import { toolEmulatorAgent } from "@/app/agents/tool-emulator";
 
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { message, apiKey, model, threadId } = body;
+    const {
+      message,
+      apiKey,
+      threadId
+    } = body;
 
     if (!message) {
       return new Response(
@@ -22,7 +26,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the agent stream
-    return contextEditingAgent({ message, apiKey, model, threadId });
+    return toolEmulatorAgent({
+      message,
+      apiKey,
+      threadId,
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({
@@ -32,6 +40,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
 
 

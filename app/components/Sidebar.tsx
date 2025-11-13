@@ -17,6 +17,7 @@ const scenarios: AgentScenario[] = [
   { id: "tool-call-limits", name: "Tool Call Limits" },
   { id: "tool-retry", name: "Tool Retry" },
   { id: "model-fallback", name: "Model Fallback" },
+  { id: "tool-emulator", name: "Tool Emulator" },
   { id: "todo-list", name: "Todo List" },
   { id: "context-editing", name: "Context Editing" },
   { id: "pii-redaction", name: "PII Redaction" },

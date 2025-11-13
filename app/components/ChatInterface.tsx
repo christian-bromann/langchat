@@ -63,6 +63,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "tool-call-limits": "/api/tool-call-limits",
   "tool-retry": "/api/tool-retry",
   "model-fallback": "/api/model-fallback",
+  "tool-emulator": "/api/tool-emulator",
   "todo-list": "/api/todo-list",
   "context-editing": "/api/context-editing",
   "pii-redaction": "/api/pii-redaction",

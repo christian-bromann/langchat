@@ -22,6 +22,9 @@ const SCENARIO_PROMPTS = {
   "model-fallback": [
     "I'm looking for a laptop. Can you help me find one and tell me about its features?"
   ],
+  "tool-emulator": [
+    "I'm user_123. Please get my preferences, then search for flights from San Francisco to Tokyo on 2024-12-15, and book a hotel in Tokyo for 3 nights starting December 15th for 2 guests."
+  ],
   "todo-list": [
     "Plan a 5-day trip to Los Angeles from NYC, leaving March 15th and returning March 22nd. My budget is $1200. Include flight options, hotel recommendations, activities, total cost breakdown, and a packing list."
   ],
