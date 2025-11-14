@@ -16,7 +16,7 @@ export default function ThemeSwitcher() {
 
   if (!mounted) {
     return (
-      <div className="p-6 pt-4 mt-auto">
+      <div className="p-6 pt-4">
         <button
           type="button"
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
@@ -50,7 +50,7 @@ export default function ThemeSwitcher() {
   };
 
   return (
-    <div className="p-6 pt-[15px] mt-auto border-t border-gray-200 dark:border-gray-800">
+    <div className="p-6 pt-[15px] border-t border-gray-200 dark:border-gray-800">
       <button
         type="button"
         onClick={handleToggle}

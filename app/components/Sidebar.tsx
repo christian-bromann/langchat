@@ -37,12 +37,15 @@ export default function Sidebar({
   onApiKeyChange
 }: SidebarProps) {
   return (
-    <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black h-screen flex flex-col">
-      <div className="p-6 flex-1 flex flex-col">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Agent Scenarios
-        </h2>
-        <nav className="space-y-2 mb-6">
+    <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black h-screen flex flex-col overflow-hidden">
+      {/* Scrollable tool selection section */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="p-6 pb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            Agent Scenarios
+          </h2>
+        </div>
+        <nav className="flex-1 overflow-y-auto px-6 space-y-2">
           {scenarios.map((scenario) => (
             <button
               key={scenario.id}
@@ -59,14 +62,17 @@ export default function Sidebar({
         </nav>
       </div>
 
-      {/* Conversation Statistics */}
-      <ConversationStatistics />
+      {/* Fixed bottom section */}
+      <div className="shrink-0 flex flex-col">
+        {/* Conversation Statistics */}
+        <ConversationStatistics />
 
-      {/* API Key Section */}
-      <ApiKeyInput apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
+        {/* API Key Section */}
+        <ApiKeyInput apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
 
-      {/* Theme Switcher */}
-      <ThemeSwitcher />
+        {/* Theme Switcher */}
+        <ThemeSwitcher />
+      </div>
     </aside>
   );
 }

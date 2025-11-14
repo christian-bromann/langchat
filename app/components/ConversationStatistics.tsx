@@ -17,7 +17,7 @@ export function ConversationStatistics() {
     .join("\n");
 
   return (
-    <div className="mt-auto p-6 border-t border-gray-200 dark:border-gray-800">
+    <div className="p-6 border-t border-gray-200 dark:border-gray-800">
       <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
         Conversation Statistics
       </h3>
