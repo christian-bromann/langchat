@@ -35,6 +35,9 @@ const SCENARIO_PROMPTS = {
     "Hi, I need to check my account balance. My SSN is 987-65-4321.",
     "I'd like to make a payment of $150. My email is michael.chen@email.com and my credit card is 4532-9876-5432-1098."
   ],
+  "llm-tool-selector": [
+    "I'm looking to buy a laptop. Can you help me find options, compare different models, check their availability and stock levels, see customer reviews and ratings, check for any discounts or deals, calculate shipping costs to New York, get product recommendations, check return policies, and see if there are any product bundles available? I'd also like to know about shipping options and delivery dates."
+  ],
 } as const;
 
 interface WelcomeScreenProps {

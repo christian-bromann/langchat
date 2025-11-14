@@ -21,6 +21,7 @@ const scenarios: AgentScenario[] = [
   { id: "todo-list", name: "Todo List" },
   { id: "context-editing", name: "Context Editing" },
   { id: "pii-redaction", name: "PII Redaction" },
+  { id: "llm-tool-selector", name: "LLM Tool Selector" },
 ];
 
 interface SidebarProps {

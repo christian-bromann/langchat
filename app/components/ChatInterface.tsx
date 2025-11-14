@@ -11,6 +11,7 @@ import type { EventType, UpdateData, AgentEventData, ToolCall, AgentStateEventDa
 import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
+import { ToolSelectionBubble, type ToolSelectionEvent } from "./ToolSelectionBubble";
 import { ErrorBubble } from "./ErrorBubble";
 import { useStatistics, countTokensApproximately } from "@/app/contexts/StatisticsContext";
 
@@ -67,6 +68,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "todo-list": "/api/todo-list",
   "context-editing": "/api/context-editing",
   "pii-redaction": "/api/pii-redaction",
+  "llm-tool-selector": "/api/llm-tool-selector",
   "mcp": "/api/mcp",
 } as const;
 
@@ -78,6 +80,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const [interruptData, setInterruptData] = useState<HITLRequest | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(undefined);
   const [summarizations, setSummarizations] = useState<SummarizationEvent[]>([]);
+  const [toolSelections, setToolSelections] = useState<ToolSelectionEvent[]>([]);
   const [errors, setErrors] = useState<Map<string, string>>(new Map()); // Map of AI message ID to error message
   const [modelNames, setModelNames] = useState<Map<string, string>>(new Map()); // Map of AI message ID to model name
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -98,6 +101,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     setCurrentThreadId(undefined);
     setInputValue("");
     setSummarizations([]);
+    setToolSelections([]);
     setErrors(new Map());
     setModelNames(new Map());
     messageCountRef.current = 0;
@@ -549,6 +553,16 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
             setInterruptData(data);
           }
         },
+        tool_selection: (data: ToolSelectionEvent) => {
+          // Handle tool selection event from LLM Tool Selector middleware
+          // Ensure timestamp is set if missing and track message index
+          const eventData: ToolSelectionEvent = {
+            ...data,
+            timestamp: data.timestamp || Date.now(),
+            afterMessageIndex: data.afterMessageIndex ?? Math.max(0, messageCountRef.current - 1),
+          };
+          setToolSelections((prev) => [...prev, eventData]);
+        },
         end: () => {
           setIsLoading(false);
           // Ensure all content is displayed when stream ends
@@ -741,10 +755,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     return map;
   }, [toolCalls]);
 
-  // Memoize the combined messages and summarizations array
+  // Memoize the combined messages, summarizations, and tool selections array
   const renderedItems = useMemo(() => {
-    // Create a combined array of messages and summarizations
-    const items: Array<{ type: 'message' | 'summarization'; data: BaseMessage | SummarizationEvent; index: number }> = [];
+    // Create a combined array of messages, summarizations, and tool selections
+    const items: { type: 'message' | 'summarization' | 'tool_selection'; data: BaseMessage | SummarizationEvent | ToolSelectionEvent; index: number }[] = [];
 
     // Add all messages
     messages.forEach((msg, index) => {
@@ -761,11 +775,25 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
       });
     });
 
+    // Add tool selections at their correct positions
+    // Position them right after the message (0.1) so they appear before tool calls
+    toolSelections.forEach((selection, idx) => {
+      // Use afterMessageIndex if available, otherwise place after last message
+      const messageIndex = selection.afterMessageIndex !== undefined
+        ? selection.afterMessageIndex
+        : Math.max(0, messages.length - 1);
+      items.push({
+        type: 'tool_selection',
+        data: selection,
+        index: messageIndex + 0.1 + idx * 0.01 // Place right after message (0.1) before tool calls, before summarizations (0.5)
+      });
+    });
+
     // Sort by index (messages have integer indices, summarizations have index + 0.5)
     items.sort((a, b) => a.index - b.index);
 
     return items;
-  }, [messages, summarizations]);
+  }, [messages, summarizations, toolSelections]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -777,10 +805,17 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-6">
-            {/* Render messages and summarizations interleaved */}
+            {/* Render messages, summarizations, and tool selections interleaved */}
             {renderedItems.map((item) => {
               if (item.type === 'summarization') {
-                return <SummarizationBubble key={item.data.id} summary={item.data as SummarizationEvent} />;
+                const summary = item.data as SummarizationEvent;
+                return <SummarizationBubble key={summary.id} summary={summary} />;
+              }
+
+              // Tool selections are now rendered as part of the message component
+              // Skip them here to avoid duplicate rendering
+              if (item.type === 'tool_selection') {
+                return null;
               }
 
               const message = item.data as BaseMessage;
@@ -793,6 +828,11 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
               const errorMessage = message.id ? errors.get(message.id) : undefined;
               const modelName = selectedScenario === "model-fallback" && message.id ? modelNames.get(message.id) : undefined;
+
+              // Check if there's a tool selection for this message index
+              const toolSelectionForMessage = toolSelections.find(
+                (selection) => selection.afterMessageIndex === messageIndex
+              );
 
               return (
                 <div key={message.id || messageIndex}>
@@ -824,6 +864,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
                       </p>
                     </div>
                   </div>}
+                  {/* Tool selection bubble - render before tool calls */}
+                  {toolSelectionForMessage && (
+                    <ToolSelectionBubble selection={toolSelectionForMessage} />
+                  )}
                   {/* Tool calls associated with this message */}
                   {associatedToolCalls.map((toolCallState) => (
                     <ToolCallBubble key={toolCallState.toolCall.id} toolCallState={toolCallState} />
@@ -900,6 +944,7 @@ interface StreamEventCallbacks {
   agent_state?: (data: AgentStateEventData) => void;
   model_request?: (data: ModelRequestEventData) => void;
   tools?: (data: ToolsEventData) => void;
+  tool_selection?: (data: ToolSelectionEvent) => void;
   end?: () => void;
   error?: (error: Error) => void;
 }
@@ -930,6 +975,33 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
   const transformLangGraphEvent = (langGraphEventType: string, payload: unknown): { eventType: EventType; eventData: unknown } => {
     let eventType: EventType = "update";
     let eventData: unknown = payload;
+
+    // Handle custom events (which contain tool_selection events)
+    if (langGraphEventType === "custom") {
+      // Custom events have format: { event: "tool_selection", data: {...} }
+      if (payload && typeof payload === "object" && payload !== null) {
+        const customPayload = payload as { event?: string; data?: unknown };
+        if (customPayload.event === "tool_selection" && customPayload.data) {
+          eventType = "tool_selection";
+          eventData = customPayload.data;
+          return { eventType, eventData };
+        }
+      }
+      // If it's a custom event but not tool_selection, treat as update
+      return { eventType: "update", eventData: payload };
+    }
+
+    // Handle direct tool_selection events (for backwards compatibility)
+    if (langGraphEventType === "tool_selection") {
+      eventType = "tool_selection";
+      // If payload has a data field, extract it; otherwise use payload directly
+      if (payload && typeof payload === "object" && "data" in payload) {
+        eventData = (payload as { data: unknown }).data;
+      } else {
+        eventData = payload;
+      }
+      return { eventType, eventData };
+    }
 
     // Check for interrupts (human-in-the-loop pauses)
     if (langGraphEventType === "interrupt") {
@@ -1022,6 +1094,24 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
         if ("langgraph_node" in secondItem) {
           // Check if first item is LangGraph native format message (has type property)
           if ("type" in firstItem && (firstItem.type === "ai" || firstItem.type === "tool")) {
+            // Ignore messages that only contain tool calls without text content
+            const content = firstItem.content;
+            const hasTextContent = Array.isArray(content)
+              ? content.some((item: unknown) => {
+                  if (typeof item === "object" && item !== null) {
+                    const itemAny = item as Record<string, unknown>;
+                    return itemAny.type === "text" && itemAny.text && String(itemAny.text).trim().length > 0;
+                  }
+                  return typeof item === "string" && item.trim().length > 0;
+                })
+              : (typeof content === "string" && content.trim().length > 0);
+
+            // If message only has tool calls and no text content, ignore it
+            if (!hasTextContent && firstItem.tool_calls && Array.isArray(firstItem.tool_calls) && firstItem.tool_calls.length > 0) {
+              // Return a no-op event that will be ignored
+              return { eventType: "update" as EventType, eventData: null };
+            }
+
             // Convert to update format for processUpdate to handle
             eventType = "update";
             eventData = payload; // Keep as [message, metadata] for processUpdate
@@ -1145,9 +1235,14 @@ async function readStream (response: Response, callbacks: StreamEventCallbacks) 
     } else if (eventType === "interrupt") {
       callbacks.interrupt?.(eventData as HITLRequest);
     } else if (eventType === "update") {
-      callbacks.update?.(eventData as UpdateData);
+      // Ignore null eventData (filtered out messages)
+      if (eventData !== null) {
+        callbacks.update?.(eventData as UpdateData);
+      }
     } else if (eventType === "agent") {
       callbacks.agent?.(eventData as AgentEventData);
+    } else if (eventType === "tool_selection") {
+      callbacks.tool_selection?.(eventData as ToolSelectionEvent);
     }
   };
 
