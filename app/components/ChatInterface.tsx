@@ -12,7 +12,7 @@ import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
 import { ErrorBubble } from "./ErrorBubble";
-import { useStatistics, countTokensApproximately } from "@/app/contexts/StatisticsContext";
+import { useStatistics } from "@/app/contexts/StatisticsContext";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
@@ -34,6 +34,24 @@ function isAIMessageChunk(chunk: unknown): boolean {
     "id" in chunkAny &&
     Array.isArray(chunkAny.id) &&
     chunkAny.id[2] === "AIMessageChunk"
+  );
+}
+
+function isAIMessage(chunk: unknown): boolean {
+  if (!chunk || typeof chunk !== "object") return false;
+
+  const chunkAny = chunk as Record<string, unknown>;
+
+  // Check for LangGraph native format (type: "ai")
+  if (chunkAny.type === "ai") return true;
+
+  // Check for old format (lc and id array)
+  return Boolean(
+    "lc" in chunkAny &&
+    "kwargs" in chunkAny &&
+    "id" in chunkAny &&
+    Array.isArray(chunkAny.id) &&
+    chunkAny.id[2] === "AIMessage"
   );
 }
 
@@ -88,6 +106,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
   const processedToolCallIdsRef = useRef<Set<string>>(new Set());
   const summarizationContentRef = useRef<string>(""); // Track accumulating summarization content
   const currentSummarizationIdRef = useRef<string | null>(null); // Track current summarization ID
+  const hasCreatedAIMessageRef = useRef<boolean>(false); // Track if we've created any AI message during this stream
   const { recordToolCall, recordModelCall, recordTokens, recordContextWindowSize, resetStatistics } = useStatistics();
 
   // Reset state when scenario changes
@@ -106,6 +125,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
     processedToolCallIdsRef.current = new Set();
     summarizationContentRef.current = "";
     currentSummarizationIdRef.current = null;
+    hasCreatedAIMessageRef.current = false;
     resetStatistics();
   }, [selectedScenario, resetStatistics]);
 
@@ -219,6 +239,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
       // Reset refs for this stream
       accumulatedContentRef.current = "";
+      hasCreatedAIMessageRef.current = false;
 
       // Reset current assistant ID
       accumulatedContentByMessageRef.clear();
@@ -400,6 +421,7 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           setMessages((prev) => {
             const exists = prev.some(m => m.id === msgId);
             if (!exists) {
+              hasCreatedAIMessageRef.current = true;
               const newMessages = [...prev, new AIMessage({
                 id: msgId,
                 content: "",
@@ -490,9 +512,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         agent_state: (data: AgentStateEventData) => {
           // Track context window size from agent_state events (which come from values events)
           const messages = data.messages || [];
-          if (messages.length > 0) {
-            const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
-            recordContextWindowSize(contextWindowTokens);
+          const lastMessage = messages.at(-1);
+          if (lastMessage && isAIMessage(lastMessage)) {
+            // @ts-expect-error - usage_metadata is not typed
+            recordContextWindowSize(lastMessage.usage_metadata?.total_tokens ?? 0);
           }
         },
         model_request: (data: ModelRequestEventData) => {
@@ -501,12 +524,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
           // Track token usage and tool calls from model_request events (these contain final, accurate counts)
           const messages = data.model_request?.messages || [];
-
-          // Count tokens in the messages array to track context window size
-          if (messages.length > 0) {
-            const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
-            recordContextWindowSize(contextWindowTokens);
-          }
 
           for (const message of messages) {
             // Track tokens - handle both LangGraph native format (usage_metadata directly) and transformed format (kwargs.usage_metadata)
@@ -579,11 +596,51 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           setIsLoading(false);
           const errorMessage = error.message || "Unknown error occurred";
 
-          // Store error associated with the current AI message
-          if (currentAssistantId) {
+          // Check if we've created an AI message for this request
+          if (hasCreatedAIMessageRef.current && currentAssistantId) {
+            // Attach error to the AI message we created for this request
             setErrors((prev) => {
               const newMap = new Map(prev);
               newMap.set(currentAssistantId, errorMessage);
+              return newMap;
+            });
+          } else {
+            // If there's no assistant message for this request yet, create one with empty content
+            // The error will be displayed via ErrorBubble component
+            // This handles cases where the error occurs before any AI message is created
+            const errorMsgId = `error-${Date.now()}`;
+            const errorMsg = new AIMessage({
+              id: errorMsgId,
+              content: "",
+            });
+
+            // Find the index of the last human message to ensure error appears after it
+            setMessages((prev) => {
+              // Find the last index of a human message
+              let lastHumanIndex = -1;
+              for (let i = prev.length - 1; i >= 0; i--) {
+                if (HumanMessage.isInstance(prev[i])) {
+                  lastHumanIndex = i;
+                  break;
+                }
+              }
+
+              // If we found a human message, insert error after it
+              // Otherwise, append to the end
+              if (lastHumanIndex >= 0) {
+                const newMessages = [...prev];
+                newMessages.splice(lastHumanIndex + 1, 0, errorMsg);
+                return newMessages;
+              } else {
+                // No human message found, append to end
+                return [...prev, errorMsg];
+              }
+            });
+
+            // Store error for the new message
+            setErrors((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(errorMsgId, errorMessage);
               return newMap;
             });
           }
@@ -644,17 +701,18 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
           return newMap;
         });
       } else {
-        // If there's no assistant message yet, create one with the error
+        // If there's no assistant message yet, create one with empty content
+        // The error will be displayed via ErrorBubble component
         // This handles cases where the error occurs before any response
+        const errorMsgId = `error-${Date.now()}`;
         const errorMsg = new AIMessage({
-          content: `Error: ${errorMessage}`,
+          id: errorMsgId,
+          content: "",
         });
         setMessages((prev) => [...prev, errorMsg]);
         setErrors((prev) => {
           const newMap = new Map(prev);
-          if (errorMsg.id) {
-            newMap.set(errorMsg.id, errorMessage);
-          }
+          newMap.set(errorMsgId, errorMessage);
           return newMap;
         });
       }
