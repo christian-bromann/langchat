@@ -60,14 +60,14 @@ export async function modelCallLimitsAgent(options: {
   apiKey: string;
   threadLimit?: number;
   runLimit?: number;
-  exitBehavior?: "throw" | "end";
+  exitBehavior?: "error" | "end";
   model?: string;
   threadId?: string;
 }) {
   const modelName = options.model ?? "claude-3-7-sonnet-latest";
-  const threadLimit = options.threadLimit ?? 30;
-  const runLimit = options.runLimit ?? 10;
-  const exitBehavior = options.exitBehavior ?? "throw" as const;
+  const threadLimit = options.threadLimit ?? 8;
+  const runLimit = options.runLimit ?? 8;
+  const exitBehavior = options.exitBehavior ?? "error" as const;
 
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
