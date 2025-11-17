@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { message, apiKey, threadLimit, runLimit, exitBehavior, threadId } = body;
+    const { message, apiKey, threadId } = body;
 
     if (!message) {
       return new Response(
@@ -25,9 +25,6 @@ export async function POST(request: NextRequest) {
     return modelCallLimitsAgent({
       message,
       apiKey,
-      threadLimit,
-      runLimit,
-      exitBehavior,
       threadId,
     });
   } catch (error) {

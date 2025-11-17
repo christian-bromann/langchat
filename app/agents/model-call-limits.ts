@@ -4,6 +4,8 @@ import { ChatAnthropic } from "@langchain/anthropic";
 
 import { checkpointer } from "@/app/utils";
 
+const SUPPORT_AGENT_MODEL_CALL_LIMIT = 8;
+
 /**
  * Model Call Limit agent - demonstrates limiting model calls
  *
@@ -60,14 +62,12 @@ export async function modelCallLimitsAgent(options: {
   apiKey: string;
   threadLimit?: number;
   runLimit?: number;
-  exitBehavior?: "throw" | "end";
+  exitBehavior?: "error" | "end";
   model?: string;
   threadId?: string;
 }) {
   const modelName = options.model ?? "claude-3-7-sonnet-latest";
-  const threadLimit = options.threadLimit ?? 30;
-  const runLimit = options.runLimit ?? 10;
-  const exitBehavior = options.exitBehavior ?? "throw" as const;
+  const exitBehavior = options.exitBehavior ?? "error" as const;
 
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
@@ -221,8 +221,8 @@ export async function modelCallLimitsAgent(options: {
     ],
     middleware: [
       modelCallLimitMiddleware({
-        threadLimit: threadLimit,
-        runLimit: runLimit,
+        threadLimit: SUPPORT_AGENT_MODEL_CALL_LIMIT,
+        runLimit: SUPPORT_AGENT_MODEL_CALL_LIMIT,
         exitBehavior,
       }),
     ],
@@ -253,12 +253,11 @@ Always be helpful, professional, and provide complete information to the custome
     messages: [new HumanMessage(options.message)],
   };
 
-  const threadId = options.threadId || `thread-${Date.now()}`;
   const stream = await agent.stream(initialState, {
     encoding: "text/event-stream",
     streamMode: ["values", "updates", "messages"],
     recursionLimit: 50, // High recursion limit to allow many calls before hitting the middleware limit
-    configurable: { thread_id: threadId },
+    configurable: { thread_id: options.threadId },
   });
 
   return new Response(stream, {
