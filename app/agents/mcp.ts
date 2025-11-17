@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createAgent, HumanMessage, mcpMiddleware } from "langchain";
+import { createAgent, HumanMessage, skillsMiddleware, mcpMiddleware } from "langchain";
 import { ChatAnthropic } from "@langchain/anthropic";
 
 import { checkpointer } from "@/app/utils";
@@ -39,6 +39,7 @@ export async function mcpAgent(options: {
   const model = new ChatAnthropic({
     model: "claude-sonnet-4-5",
     apiKey: options.apiKey,
+    verbose: true,
   });
 
   // Configure MCP servers
@@ -88,6 +89,7 @@ export async function mcpAgent(options: {
       mcpMiddleware({
         mcpConfig,
       }),
+      skillsMiddleware()
     ],
     checkpointer,
     systemPrompt: `You are a helpful assistant.`,

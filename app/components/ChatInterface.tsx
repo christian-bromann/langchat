@@ -12,7 +12,7 @@ import { ToolCallBubble, type ToolCallState } from "./ToolCall";
 import { InterruptBubble } from "./InterruptBubble";
 import { SummarizationBubble, type SummarizationEvent, parseSummarizationEvent } from "./SummarizationBubble";
 import { ErrorBubble } from "./ErrorBubble";
-import { useStatistics, countTokensApproximately } from "@/app/contexts/StatisticsContext";
+import { useStatistics } from "@/app/contexts/StatisticsContext";
 
 interface ChatInterfaceProps {
   selectedScenario?: string;
@@ -34,6 +34,24 @@ function isAIMessageChunk(chunk: unknown): boolean {
     "id" in chunkAny &&
     Array.isArray(chunkAny.id) &&
     chunkAny.id[2] === "AIMessageChunk"
+  );
+}
+
+function isAIMessage(chunk: unknown): boolean {
+  if (!chunk || typeof chunk !== "object") return false;
+
+  const chunkAny = chunk as Record<string, unknown>;
+
+  // Check for LangGraph native format (type: "ai")
+  if (chunkAny.type === "ai") return true;
+
+  // Check for old format (lc and id array)
+  return Boolean(
+    "lc" in chunkAny &&
+    "kwargs" in chunkAny &&
+    "id" in chunkAny &&
+    Array.isArray(chunkAny.id) &&
+    chunkAny.id[2] === "AIMessage"
   );
 }
 
@@ -490,9 +508,10 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
         agent_state: (data: AgentStateEventData) => {
           // Track context window size from agent_state events (which come from values events)
           const messages = data.messages || [];
-          if (messages.length > 0) {
-            const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
-            recordContextWindowSize(contextWindowTokens);
+          const lastMessage = messages.at(-1);
+          if (lastMessage && isAIMessage(lastMessage)) {
+            // @ts-expect-error - usage_metadata is not typed
+            recordContextWindowSize(lastMessage.usage_metadata?.total_tokens ?? 0);
           }
         },
         model_request: (data: ModelRequestEventData) => {
@@ -501,12 +520,6 @@ export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfac
 
           // Track token usage and tool calls from model_request events (these contain final, accurate counts)
           const messages = data.model_request?.messages || [];
-
-          // Count tokens in the messages array to track context window size
-          if (messages.length > 0) {
-            const contextWindowTokens = countTokensApproximately(messages as unknown as Array<Record<string, unknown>>);
-            recordContextWindowSize(contextWindowTokens);
-          }
 
           for (const message of messages) {
             // Track tokens - handle both LangGraph native format (usage_metadata directly) and transformed format (kwargs.usage_metadata)

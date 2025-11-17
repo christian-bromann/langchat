@@ -1,42 +1,6 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
-import { BaseMessage } from "@langchain/core/messages";
-
-/**
- * Default token counter that approximates based on character count
- * Handles both BaseMessage format and model_request message format
- * @param messages Messages to count tokens for (can be BaseMessage[] or model_request message format)
- * @returns Approximate token count
- */
-export function countTokensApproximately(messages: BaseMessage[]): number {
-  let totalChars = 0;
-  for (const msg of messages) {
-    let textContent: string = "";
-
-    // Handle BaseMessage format and LangGraph native format (has content property directly)
-    if ("content" in msg) {
-      const content = msg.content;
-      if (typeof content === "string") {
-        textContent = content;
-      } else if (Array.isArray(content)) {
-        textContent = content
-          .map((item) => {
-            if (typeof item === "string") return item;
-            if (item && typeof item === "object" && "type" in item && item.type === "text" && "text" in item) {
-              return (item as { text: string }).text;
-            }
-            return "";
-          })
-          .join("");
-      }
-    }
-
-    totalChars += textContent.length;
-  }
-  // Approximate 1 token = 4 characters
-  return Math.ceil(totalChars / 4);
-}
 
 export interface Statistics {
   toolCalls: Map<string, number>; // tool name -> count
