@@ -69,7 +69,7 @@ export async function toolCallLimitsAgent(options: {
       name: "send_sms",
       description: "Actually sends an SMS message to a recipient. Each call costs 1 credit. The user has a prepaid SMS balance with limited credits remaining.",
       schema: z.object({
-        recipient: z.string().describe("The name or identifier of the recipient (e.g., 'mom', 'sister', 'Alice')"),
+        recipient: z.string().describe(`The name or identifier of the recipient (e.g., 'mom', 'sister', 'Alice'). The available recipients are: ${Object.entries(PHONE_BOOK).map(([key, value]) => `${key} - ${value}`).join(", ")}`),
         message: z.string().describe("The message text to send"),
       }),
     }
@@ -84,7 +84,7 @@ export async function toolCallLimitsAgent(options: {
       toolName: "send_sms",
       threadLimit: userCredits,
       runLimit: userCredits,
-      exitBehavior: "error",
+      exitBehavior: "continue",
     })],
     checkpointer,
   });

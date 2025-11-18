@@ -14,7 +14,8 @@ const SCENARIO_PROMPTS = {
     "I'm alice@example.com. Can you check the shipping status for all my orders and also see what Electronics products are available?"
   ],
   "tool-call-limits": [
-    "Hey, can you text my mom and let her know I'm on my way?"
+    "Hey, can you text my mom and let her know I'm on my way?",
+    "Please send a message to my family and let them know: 'I'm on my way.'"
   ],
   "tool-retry": [
     "What's the weather like in New York and San Francisco?"
