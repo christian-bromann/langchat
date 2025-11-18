@@ -84,7 +84,7 @@ export async function toolCallLimitsAgent(options: {
       toolName: "send_sms",
       threadLimit: userCredits,
       runLimit: userCredits,
-      exitBehavior: "continue",
+      exitBehavior: "error",
     })],
     checkpointer,
   });
