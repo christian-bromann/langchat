@@ -85,7 +85,7 @@ export async function todoListAgent(options: {
 }) {
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
-    model: "claude-3-7-sonnet-latest",
+    model: "claude-sonnet-4-5",
     apiKey: options.apiKey,
   });
 

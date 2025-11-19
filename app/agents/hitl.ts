@@ -31,7 +31,7 @@ export async function hitlAgent(options: {
   interruptResponse?: HITLResponse;
   model?: string;
 }) {
-  const modelName = options.model ?? "claude-3-7-sonnet-latest";
+  const modelName = options.model ?? "claude-sonnet-4-5";
 
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({

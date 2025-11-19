@@ -66,7 +66,7 @@ export async function modelCallLimitsAgent(options: {
   model?: string;
   threadId?: string;
 }) {
-  const modelName = options.model ?? "claude-3-7-sonnet-latest";
+  const modelName = options.model ?? "claude-sonnet-4-5";
   const exitBehavior = options.exitBehavior ?? "error" as const;
 
   // Create the Anthropic model instance with user-provided API key

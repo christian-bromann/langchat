@@ -125,19 +125,19 @@ export async function modelFallbackAgent(options: {
   // Primary model - this is what will be used first
   // Uses mocked fetch to simulate network failures, demonstrating fallback behavior
   const primaryModel = new ChatAnthropic({
-    model: "claude-sonnet-4-5-20250929",
+    model: "claude-sonnet-4-5",
     clientOptions: { fetch: createMockedFetch(options.threadId!, 0.9) },
     ...modelOptions,
   });
 
   const secondaryModel = new ChatAnthropic({
-    model: "claude-sonnet-4-0",
+    model: "claude-opus-4-1",
     clientOptions: { fetch: createMockedFetch(options.threadId!, 0.5) },
     ...modelOptions,
   });
 
   const tertiaryModel = new ChatAnthropic({
-    model: "claude-3-7-sonnet-latest",
+    model: "claude-sonnet-4-0",
     clientOptions: { fetch: createMockedFetch(options.threadId!, 0.05) },
     ...modelOptions,
   });
