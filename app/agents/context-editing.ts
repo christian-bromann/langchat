@@ -276,11 +276,11 @@ export async function contextEditingAgent(options: {
       contextEditingMiddleware({
         edits: [
           new ClearToolUsesEdit({
-            triggerTokens: 2000,      // Lower threshold for demo (default is 100K)
-            keep: { messages: 3 },    // Keep 3 most recent tool results
-            clearToolInputs: false,   // Keep tool call arguments for context
-            excludeTools: [],         // No tools excluded from clearing
-            placeholder: "[cleared]", // Placeholder for cleared results
+            trigger: { tokens: 3000 }, // Lower threshold for demo (default is 100K)
+            keep: { messages: 3 },     // Keep 3 most recent tool results
+            clearToolInputs: false,    // Keep tool call arguments for context
+            excludeTools: [],          // No tools excluded from clearing
+            placeholder: "[cleared]",  // Placeholder for cleared results
           }),
         ],
         tokenCountMethod: "approx", // Use approximate counting for speed
