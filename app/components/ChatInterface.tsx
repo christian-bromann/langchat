@@ -68,6 +68,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "context-editing": "/api/context-editing",
   "pii-redaction": "/api/pii-redaction",
   "mcp": "/api/mcp",
+  "moderation": "/api/moderation",
 } as const;
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
