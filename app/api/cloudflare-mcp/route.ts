@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { mcpKnowledgeAgent } from "@/app/agents/mcp-knowledge";
+import { cloudflareMcpAgent } from "@/app/agents/cloudflare-mcp";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the agent stream with optional Cloudflare API token
-    return mcpKnowledgeAgent({ 
-      message, 
+    return cloudflareMcpAgent({
+      message,
       apiKey,
-      cloudflareApiToken 
+      cloudflareApiToken
     });
   } catch (error) {
     return new Response(

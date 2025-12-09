@@ -69,7 +69,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "pii-redaction": "/api/pii-redaction",
   "mcp": "/api/mcp",
   "moderation": "/api/moderation",
-  "mcp-knowledge": "/api/mcp-knowledge",
+  "cloudflare-mcp": "/api/cloudflare-mcp",
 } as const;
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {

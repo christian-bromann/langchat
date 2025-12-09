@@ -22,39 +22,7 @@ The application includes the following agent scenarios:
 - **Context Editing** - Dynamic context manipulation
 - **PII Redaction** - Automatic redaction of personally identifiable information
 - **Content Moderation** - Content filtering and moderation
-- **MCP Knowledge Agent** - Integration with Anthropic's built-in MCP toolset and Cloudflare's managed MCP servers
-
-### MCP Knowledge Agent
-
-The **MCP Knowledge Agent** showcases Anthropic's built-in tools for connecting to Model Context Protocol (MCP) servers. This agent demonstrates:
-
-- **Dynamic Tool Discovery** - Uses `toolSearchRegex_20251119` to find relevant tools across all MCP servers
-- **Deferred Loading** - Efficiently manages hundreds of tools by loading them on-demand
-- **Multiple MCP Server Integration** - Connects to 15 Cloudflare managed MCP servers:
-  - Documentation server - Cloudflare documentation search
-  - Workers Bindings - Storage, AI, and compute primitives
-  - Workers Builds - Build management and insights
-  - Observability - Logs and analytics
-  - Radar - Internet traffic insights and URL scanning
-  - Container - Sandbox development environments
-  - Browser Rendering - Web page fetching and screenshots
-  - Logpush - Log job health monitoring
-  - AI Gateway - Prompt and response analysis
-  - AI Search - Document search
-  - Audit Logs - Audit log queries and reports
-  - DNS Analytics - DNS performance optimization
-  - Digital Experience Monitoring - Application insights
-  - Cloudflare One CASB - Security misconfiguration detection
-  - GraphQL - Analytics via Cloudflare's GraphQL API
-
-**Example queries:**
-
-- "What are the latest Internet trends according to Cloudflare Radar?"
-- "Help me debug my Worker's logs"
-- "Fetch and analyze this webpage using Browser Rendering"
-- "Search Cloudflare's documentation for Workers KV usage"
-
-**Note:** This agent requires the Anthropic built-in tools (`tools.mcpToolset_20251120` and `tools.toolSearchRegex_20251119`) which will be available in a future release of `@langchain/anthropic`. The current implementation shows a preview of how it will work.
+- **Cloudflare MCP Agent** - Integration with Anthropic's built-in MCP toolset and Cloudflare's managed MCP servers
 
 ## Getting Started
 
@@ -76,7 +44,9 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You'll need an **Anthropic API key** to use the application. Enter it in the sidebar when prompted.
 
-For the MCP Knowledge Agent, you can optionally provide a **Cloudflare API token** for authenticated access to Cloudflare's MCP servers.
+For the Cloudflare MCP Agent, you can optionally provide a **Cloudflare API token** for authenticated access to Cloudflare's MCP servers.
+
+For the Content Moderation Agent, you have to provide additionally an `OPENAI_API_KEY` environment variable with your OpenAI API key.
 
 ## Learn More
 

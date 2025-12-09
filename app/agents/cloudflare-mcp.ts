@@ -29,84 +29,84 @@ const CLOUDFLARE_MCP_SERVERS = [
     name: "cloudflare-docs",
     description: "Get up to date reference information on Cloudflare"
   },
-  {
-    type: "url",
-    url: "https://bindings.mcp.cloudflare.com/mcp",
-    name: "cloudflare-bindings",
-    description: "Build Workers applications with storage, AI, and compute primitives"
-  },
-  {
-    type: "url",
-    url: "https://builds.mcp.cloudflare.com/mcp",
-    name: "cloudflare-builds",
-    description: "Get insights and manage your Cloudflare Workers Builds"
-  },
-  {
-    type: "url",
-    url: "https://observability.mcp.cloudflare.com/mcp",
-    name: "cloudflare-observability",
-    description: "Debug and get insight into your application's logs and analytics"
-  },
-  {
-    type: "url",
-    url: "https://radar.mcp.cloudflare.com/mcp",
-    name: "cloudflare-radar",
-    description: "Get global Internet traffic insights, trends, URL scans, and other utilities"
-  },
-  {
-    type: "url",
-    url: "https://containers.mcp.cloudflare.com/mcp",
-    name: "cloudflare-container",
-    description: "Spin up a sandbox development environment"
-  },
+  // {
+  //   type: "url",
+  //   url: "https://bindings.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-bindings",
+  //   description: "Build Workers applications with storage, AI, and compute primitives"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://builds.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-builds",
+  //   description: "Get insights and manage your Cloudflare Workers Builds"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://observability.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-observability",
+  //   description: "Debug and get insight into your application's logs and analytics"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://radar.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-radar",
+  //   description: "Get global Internet traffic insights, trends, URL scans, and other utilities"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://containers.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-container",
+  //   description: "Spin up a sandbox development environment"
+  // },
   {
     type: "url",
     url: "https://browser.mcp.cloudflare.com/mcp",
     name: "cloudflare-browser",
     description: "Fetch web pages, convert them to markdown and take screenshots"
   },
-  {
-    type: "url",
-    url: "https://logs.mcp.cloudflare.com/mcp",
-    name: "cloudflare-logpush",
-    description: "Get quick summaries for Logpush job health"
-  },
-  {
-    type: "url",
-    url: "https://ai-gateway.mcp.cloudflare.com/mcp",
-    name: "cloudflare-ai-gateway",
-    description: "Search your logs, get details about the prompts and responses"
-  },
-  {
-    type: "url",
-    url: "https://autorag.mcp.cloudflare.com/mcp",
-    name: "cloudflare-ai-search",
-    description: "List and search documents on your AI Searchs"
-  },
-  {
-    type: "url",
-    url: "https://auditlogs.mcp.cloudflare.com/mcp",
-    name: "cloudflare-audit-logs",
-    description: "Query audit logs and generate reports for review"
-  },
-  {
-    type: "url",
-    url: "https://dns-analytics.mcp.cloudflare.com/mcp",
-    name: "cloudflare-dns-analytics",
-    description: "Optimize DNS performance and debug issues based on current set up"
-  },
-  {
-    type: "url",
-    url: "https://dex.mcp.cloudflare.com/mcp",
-    name: "cloudflare-dex",
-    description: "Get quick insight on critical applications for your organization"
-  },
-  {
-    type: "url",
-    url: "https://casb.mcp.cloudflare.com/mcp",
-    name: "cloudflare-casb",
-    description: "Quickly identify any security misconfigurations for SaaS applications to safeguard users & data"
-  },
+  // {
+  //   type: "url",
+  //   url: "https://logs.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-logpush",
+  //   description: "Get quick summaries for Logpush job health"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://ai-gateway.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-ai-gateway",
+  //   description: "Search your logs, get details about the prompts and responses"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://autorag.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-ai-search",
+  //   description: "List and search documents on your AI Searchs"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://auditlogs.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-audit-logs",
+  //   description: "Query audit logs and generate reports for review"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://dns-analytics.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-dns-analytics",
+  //   description: "Optimize DNS performance and debug issues based on current set up"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://dex.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-dex",
+  //   description: "Get quick insight on critical applications for your organization"
+  // },
+  // {
+  //   type: "url",
+  //   url: "https://casb.mcp.cloudflare.com/mcp",
+  //   name: "cloudflare-casb",
+  //   description: "Quickly identify any security misconfigurations for SaaS applications to safeguard users & data"
+  // },
   {
     type: "url",
     url: "https://graphql.mcp.cloudflare.com/mcp",
@@ -116,7 +116,7 @@ const CLOUDFLARE_MCP_SERVERS = [
 ] as const;
 
 /**
- * MCP Knowledge Agent - Showcases Anthropic's built-in MCP toolset with Cloudflare servers
+ * Cloudflare MCP Agent - Showcases Anthropic's built-in MCP toolset with Cloudflare servers
  *
  * This agent demonstrates:
  * - Using Anthropic's mcpToolset_20251120 to connect to multiple MCP servers
@@ -124,7 +124,7 @@ const CLOUDFLARE_MCP_SERVERS = [
  * - Deferred loading for efficient tool management with hundreds of tools
  * - Integration with Cloudflare's managed MCP servers
  */
-export async function mcpKnowledgeAgent(options: {
+export async function cloudflareMcpAgent(options: {
   message: string;
   apiKey: string;
   model?: string;

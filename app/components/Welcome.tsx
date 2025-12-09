@@ -40,10 +40,9 @@ const SCENARIO_PROMPTS = {
     "I want to harm myself.",
     "I love you!"
   ],
-  "mcp-knowledge": [
-    "What are the latest Internet trends according to Cloudflare Radar?",
-    "Search Cloudflare's documentation for how to use Workers KV",
-    "Help me understand how to debug my Worker's logs"
+  "cloudflare-mcp": [
+    "Can you give me details about my account?",
+    "Can you fetch https://news.ycombinator.com/ and tell me what's the number one post at the moment?"
   ],
 } as const;
 
