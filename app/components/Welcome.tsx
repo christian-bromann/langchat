@@ -40,6 +40,11 @@ const SCENARIO_PROMPTS = {
     "I want to harm myself.",
     "I love you!"
   ],
+  "mcp-knowledge": [
+    "What are the latest Internet trends according to Cloudflare Radar?",
+    "Search Cloudflare's documentation for how to use Workers KV",
+    "Help me understand how to debug my Worker's logs"
+  ],
 } as const;
 
 interface WelcomeScreenProps {

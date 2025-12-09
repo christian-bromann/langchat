@@ -22,6 +22,7 @@ const scenarios: AgentScenario[] = [
   { id: "context-editing", name: "Context Editing" },
   { id: "pii-redaction", name: "PII Redaction" },
   { id: "moderation", name: "Content Moderation" },
+  { id: "mcp-knowledge", name: "MCP Knowledge Agent" },
 ];
 
 interface SidebarProps {

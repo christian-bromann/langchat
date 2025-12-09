@@ -44,5 +44,12 @@
     "tailwindcss": "^4",
     "typescript": "^5"
   },
-  "packageManager": "pnpm@10.25.0"
+  "packageManager": "pnpm@10.25.0",
+  "pnpm": {
+    "overrides": {
+      "langchain": "file:../langchainjs/libs/langchain",
+      "@langchain/anthropic": "file:../langchainjs/libs/providers/langchain-anthropic",
+      "@langchain/core": "file:../langchainjs/libs/langchain-core"
+    }
+  }
 }
