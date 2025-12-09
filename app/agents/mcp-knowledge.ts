@@ -130,7 +130,8 @@ export async function mcpKnowledgeAgent(options: {
   model?: string;
   cloudflareApiToken?: string;
 }) {
-  const modelName = options.model ?? "claude-sonnet-4-5";
+  const modelName = options.model ?? "claude-haiku-4-5-20251001";
+  const cloudflareApiToken = options.cloudflareApiToken ?? process.env.CLOUDFLARE_TOKEN;
 
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
@@ -149,7 +150,7 @@ export async function mcpKnowledgeAgent(options: {
     url: server.url,
     name: server.name,
     // Add authorization token if provided by user
-    ...(options.cloudflareApiToken ? { authorization_token: options.cloudflareApiToken } : {})
+    ...(cloudflareApiToken ? { authorization_token: cloudflareApiToken } : {})
   }));
 
   // Create MCP toolsets for each server with deferred loading
@@ -158,21 +159,24 @@ export async function mcpKnowledgeAgent(options: {
     tools.mcpToolset_20251120({
       serverName: server.name,
       // Enable deferred loading to work with tool search
-      // defaultConfig: { deferLoading: true }
+      defaultConfig: { deferLoading: true },
+      cacheControl: { type: 'ephemeral' }
     })
   );
 
   // Add tool search capability (using regex variant)
   // This allows Claude to search through all available tools and load them as needed
-  // const toolSearch = tools.toolSearchRegex_20251119();
+  const toolSearch = tools.toolSearchRegex_20251119({
+    cacheControl: { type: 'ephemeral' }
+  });
 
   // Combine all tools
-  // const allTools = [toolSearch, ...mcpToolsets];
+  const allTools = [toolSearch, ...mcpToolsets];
 
   // Create agent with MCP servers configuration
   const agent = createAgent({
     model,
-    tools: mcpToolsets,
+    tools: allTools,
     middleware: [mcpServersMiddleware(mcpServers)],
     systemPrompt: `You are a helpful assistant with access to Cloudflare's suite of MCP servers.
 
