@@ -40,6 +40,10 @@ const SCENARIO_PROMPTS = {
     "I want to harm myself.",
     "I love you!"
   ],
+  "cloudflare-mcp": [
+    "Can you give me details about my account?",
+    "Can you fetch https://news.ycombinator.com/ and tell me what's the number one post at the moment?"
+  ],
 } as const;
 
 interface WelcomeScreenProps {

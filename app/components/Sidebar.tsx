@@ -22,6 +22,7 @@ const scenarios: AgentScenario[] = [
   { id: "context-editing", name: "Context Editing" },
   { id: "pii-redaction", name: "PII Redaction" },
   { id: "moderation", name: "Content Moderation" },
+  { id: "cloudflare-mcp", name: "Cloudflare MCP Agent" },
 ];
 
 interface SidebarProps {

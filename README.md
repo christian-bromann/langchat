@@ -1,24 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LangChat
+
+A sandbox for showcasing different use cases of LangChain's `createAgent` with various agent scenarios and capabilities.
+
+## Overview
+
+This is a [Next.js](https://nextjs.org) application that demonstrates various LangChain agent patterns and capabilities, including tool use, human-in-the-loop, context management, and more.
+
+## Agent Scenarios
+
+The application includes the following agent scenarios:
+
+- **Simple Agent** - Basic agent with tool calling capabilities
+- **Human In the Loop** - Agents that request human approval before executing actions
+- **Summarization** - Context summarization for managing long conversations
+- **Model Call Limits** - Controlling the number of model calls
+- **Tool Call Limits** - Limiting tool execution attempts
+- **Tool Retry** - Automatic retry logic for failed tool calls
+- **Model Fallback** - Fallback to alternative models on failure
+- **Tool Emulator** - Emulating tool behavior for testing
+- **Todo List** - Task management agent
+- **Context Editing** - Dynamic context manipulation
+- **PII Redaction** - Automatic redaction of personally identifiable information
+- **Content Moderation** - Content filtering and moderation
+- **Cloudflare MCP Agent** - Integration with Anthropic's built-in MCP toolset and Cloudflare's managed MCP servers
 
 ## Getting Started
 
-First, run the development server:
+First, install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+```
+
+Then, run the development server:
+
+```bash
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### API Keys
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+You'll need an **Anthropic API key** to use the application. Enter it in the sidebar when prompted.
+
+For the Cloudflare MCP Agent, you can optionally provide a **Cloudflare API token** for authenticated access to Cloudflare's MCP servers.
+
+For the Content Moderation Agent, you have to provide additionally an `OPENAI_API_KEY` environment variable with your OpenAI API key.
 
 ## Learn More
 
