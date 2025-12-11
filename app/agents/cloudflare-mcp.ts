@@ -138,20 +138,6 @@ export async function cloudflareMcpAgent(options: {
     apiKey: options.apiKey,
   });
 
-  // Initialize the conversation with just the user message
-  const initialState = {
-    messages: [new HumanMessage(options.message)],
-  };
-
-  // Configure MCP servers with optional authentication
-  const mcpServers = CLOUDFLARE_MCP_SERVERS.map(server => ({
-    type: server.type,
-    url: server.url,
-    name: server.name,
-    // Add authorization token if provided by user
-    ...(cloudflareApiToken ? { authorization_token: cloudflareApiToken } : {})
-  }));
-
   // Create MCP toolsets for each server with deferred loading
   // This allows Claude to dynamically discover and load tools on-demand
   const mcpToolsets = CLOUDFLARE_MCP_SERVERS.map(server =>
@@ -175,6 +161,11 @@ export async function cloudflareMcpAgent(options: {
     cacheControl: { type: 'ephemeral' }
   });
 
+  // Initialize the conversation with just the user message
+  const initialState = {
+    messages: [new HumanMessage(options.message)],
+  };
+
   // Combine all tools
   const allTools = [toolSearch, ...mcpToolsets];
 
@@ -182,7 +173,13 @@ export async function cloudflareMcpAgent(options: {
   const agent = createAgent({
     model,
     tools: allTools,
-    middleware: [mcpServersMiddleware(mcpServers)],
+    middleware: [mcpServersMiddleware(CLOUDFLARE_MCP_SERVERS.map(server => ({
+      type: server.type,
+      url: server.url,
+      name: server.name,
+      // Add authorization token if provided by user
+      ...(cloudflareApiToken ? { authorization_token: cloudflareApiToken } : {})
+    })))],
     systemPrompt: `You are a helpful assistant with access to Cloudflare's suite of MCP servers.
 
 You have access to the following Cloudflare services:
