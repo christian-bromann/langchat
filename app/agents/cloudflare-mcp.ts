@@ -2,24 +2,6 @@ import { createAgent, createMiddleware, HumanMessage } from "langchain";
 import { ChatAnthropic, tools } from "@langchain/anthropic";
 
 /**
- * Middleware to inject MCP servers configuration into model calls
- */
-function mcpServersMiddleware(mcpServers: Record<string, unknown>[]) {
-  return createMiddleware({
-    name: "mcpServersMiddleware",
-    wrapModelCall: async (config, request) => {
-      // Inject mcp_servers into the model call options
-      return request({
-        ...config,
-        modelSettings: {
-          mcp_servers: mcpServers,
-        },
-      })
-    },
-  });
-}
-
-/**
  * Cloudflare MCP Servers configuration
  */
 const CLOUDFLARE_MCP_SERVERS = [
@@ -116,6 +98,24 @@ const CLOUDFLARE_MCP_SERVERS = [
 ] as const;
 
 /**
+ * Middleware to inject MCP servers configuration into model calls
+ */
+function mcpServersMiddleware(mcpServers: Record<string, unknown>[]) {
+  return createMiddleware({
+    name: "mcpServersMiddleware",
+    wrapModelCall: async (config, request) => {
+      // Inject mcp_servers into the model call options
+      return request({
+        ...config,
+        modelSettings: {
+          mcp_servers: mcpServers,
+        },
+      })
+    },
+  });
+}
+
+/**
  * Cloudflare MCP Agent - Showcases Anthropic's built-in MCP toolset with Cloudflare servers
  *
  * This agent demonstrates:
@@ -130,12 +130,11 @@ export async function cloudflareMcpAgent(options: {
   model?: string;
   cloudflareApiToken?: string;
 }) {
-  const modelName = options.model ?? "claude-haiku-4-5-20251001";
   const cloudflareApiToken = options.cloudflareApiToken ?? process.env.CLOUDFLARE_TOKEN;
 
   // Create the Anthropic model instance with user-provided API key
   const model = new ChatAnthropic({
-    model: modelName,
+    model: "claude-haiku-4-5-20251001",
     apiKey: options.apiKey,
   });
 
@@ -160,7 +159,13 @@ export async function cloudflareMcpAgent(options: {
       serverName: server.name,
       // Enable deferred loading to work with tool search
       defaultConfig: { deferLoading: true },
-      cacheControl: { type: 'ephemeral' }
+      cacheControl: { type: 'ephemeral' },
+      configs: {
+        "cloudflare-docs": {
+          // deferLoading: true,
+          // ...
+        }
+      }
     })
   );
 
