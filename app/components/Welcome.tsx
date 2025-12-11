@@ -44,6 +44,9 @@ const SCENARIO_PROMPTS = {
     "Can you give me details about my account?",
     "Can you fetch https://news.ycombinator.com/ and tell me what's the number one post at the moment?"
   ],
+  "programmatic-tool-calling": [
+    "Query sales data for the West, East, and Central regions, then tell me which region had the highest revenue"
+  ],
 } as const;
 
 interface WelcomeScreenProps {

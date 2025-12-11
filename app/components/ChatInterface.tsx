@@ -70,6 +70,7 @@ const API_ENDPOINTS: Record<string, string> = {
   "mcp": "/api/mcp",
   "moderation": "/api/moderation",
   "cloudflare-mcp": "/api/cloudflare-mcp",
+  "programmatic-tool-calling": "/api/programmatic-tool-calling",
 } as const;
 
 export default function ChatInterface({ selectedScenario, apiKey }: ChatInterfaceProps) {
